@@ -11,7 +11,8 @@ public enum BoardCommand
     New, Open, Library, Save, SaveAs, AddImage, Undo, Redo, Copy, Paste, Duplicate, SelectAll,
     Group, Ungroup, ToggleLock, Delete, Bold, Fit, AddFrame, Present, Fullscreen, Settings,
     SelectTool, HandTool, TextTool, ListTool, PenTool, ArrowTool, EraserTool,
-    NextFrame, PreviousFrame, PresentationNext, PresentationPrevious, PresentationFirst, PresentationLast
+    NextFrame, PreviousFrame, PresentationNext, PresentationPrevious, PresentationFirst, PresentationLast,
+    MarkerTool, RectangleTool, EllipseTool, CalloutTool, AddTimeline, PresentationPointer, PresentationSpotlight, PresentationCurtain
 }
 
 public readonly record struct ShortcutGesture(Key Key, ModifierKeys Modifiers = ModifierKeys.None)
@@ -69,11 +70,19 @@ public sealed class ShortcutProfile
         new(BoardCommand.PenTool, "Карандаш", "Инструменты", ShortcutContext.Editor, false, new ShortcutGesture(Key.P)),
         new(BoardCommand.ArrowTool, "Стрелка", "Инструменты", ShortcutContext.Editor, false, new ShortcutGesture(Key.A)),
         new(BoardCommand.EraserTool, "Ластик", "Инструменты", ShortcutContext.Editor, false, new ShortcutGesture(Key.E)),
+        new(BoardCommand.MarkerTool, "Маркер-выделитель", "Инструменты", ShortcutContext.Editor, false, new ShortcutGesture(Key.M)),
+        new(BoardCommand.RectangleTool, "Прямоугольник", "Инструменты", ShortcutContext.Editor, false, new ShortcutGesture(Key.R)),
+        new(BoardCommand.EllipseTool, "Овал", "Инструменты", ShortcutContext.Editor, false, new ShortcutGesture(Key.O)),
+        new(BoardCommand.CalloutTool, "Выноска", "Инструменты", ShortcutContext.Editor, false, new ShortcutGesture(Key.B)),
+        new(BoardCommand.AddTimeline, "Добавить ленту времени", "Уроки", ShortcutContext.Editor, false, Ctrl(Key.T)),
         new(BoardCommand.Present, "Начать / завершить показ", "Показ", ShortcutContext.Both, false, new ShortcutGesture(Key.F5)),
         new(BoardCommand.PresentationNext, "Следующий кадр в показе", "Показ", ShortcutContext.Presentation, false, new ShortcutGesture(Key.Right), new ShortcutGesture(Key.Next), new ShortcutGesture(Key.Space)),
         new(BoardCommand.PresentationPrevious, "Предыдущий кадр в показе", "Показ", ShortcutContext.Presentation, false, new ShortcutGesture(Key.Left), new ShortcutGesture(Key.Prior), new ShortcutGesture(Key.Back)),
         new(BoardCommand.PresentationFirst, "Первый кадр в показе", "Показ", ShortcutContext.Presentation, false, new ShortcutGesture(Key.Home)),
         new(BoardCommand.PresentationLast, "Последний кадр в показе", "Показ", ShortcutContext.Presentation, false, new ShortcutGesture(Key.End)),
+        new(BoardCommand.PresentationPointer, "Указка", "Показ", ShortcutContext.Presentation, false, new ShortcutGesture(Key.P)),
+        new(BoardCommand.PresentationSpotlight, "Прожектор", "Показ", ShortcutContext.Presentation, false, new ShortcutGesture(Key.S)),
+        new(BoardCommand.PresentationCurtain, "Шторка", "Показ", ShortcutContext.Presentation, false, new ShortcutGesture(Key.B)),
         new(BoardCommand.Fullscreen, "Полный экран", "Общие", ShortcutContext.Both, true, new ShortcutGesture(Key.F11)),
         new(BoardCommand.Settings, "Настройки", "Общие", ShortcutContext.Editor, true, Ctrl(Key.OemComma))
     };

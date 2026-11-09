@@ -20,7 +20,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, Button> colorButtons = [];
     private string color = "#26352F";
     private double fontSize = 32, strokeSize = 4, zoom = 1;
-    private bool bold, serif, fitting, ready, syncing, fullscreen;
+    private bool bold, serif, fitting, ready, syncing, fullscreen, fillShapes;
     private string? currentPath;
     private int revision, savedRevision, autosavedRevision = -1;
     private readonly DispatcherTimer autosaveTimer = new() { Interval = TimeSpan.FromSeconds(1.5) };
@@ -49,12 +49,13 @@ public partial class MainWindow : Window
     {
         (BoardTool Tool, string Icon, string Label, string Shortcut)[] list =
         [ (BoardTool.Select, "↖", "Выбор", "V"), (BoardTool.Hand, "✥", "Рука — двигать доску", "H / Пробел"), (BoardTool.Text, "Т", "Текст", "T"), (BoardTool.List, "≡", "Список", "L"),
-          (BoardTool.Pen, "✎", "Карандаш", "P"), (BoardTool.Arrow, "↗", "Стрелка", "A"), (BoardTool.Eraser, "⌫", "Ластик", "E") ];
+          (BoardTool.Callout, "❝", "Выноска", "B"), (BoardTool.Pen, "✎", "Карандаш", "P"), (BoardTool.Marker, "▍", "Маркер-выделитель", "M"), (BoardTool.Arrow, "↗", "Стрелка", "A"),
+          (BoardTool.Rectangle, "▭", "Прямоугольник", "R"), (BoardTool.Ellipse, "◯", "Овал", "O"), (BoardTool.Eraser, "⌫", "Ластик", "E") ];
         foreach (var item in list)
         {
             var content = new StackPanel();
-            content.Children.Add(new TextBlock { Text = item.Icon, FontFamily = new FontFamily("Segoe UI Symbol"), FontSize = 20, HorizontalAlignment = HorizontalAlignment.Center });
-            var button = new Button { Content = content, ToolTip = item.Label + " · " + item.Shortcut, Height = 36, Padding = new Thickness(2), Margin = new Thickness(0, 0, 0, 4) };
+            content.Children.Add(new TextBlock { Text = item.Icon, FontFamily = new FontFamily("Segoe UI Symbol"), FontSize = 18, HorizontalAlignment = HorizontalAlignment.Center });
+            var button = new Button { Content = content, ToolTip = item.Label + " · " + item.Shortcut, Height = 32, Padding = new Thickness(2), Margin = new Thickness(0, 0, 0, 2) };
             AutomationProperties.SetName(button, item.Label);
             var value = item.Tool;
             button.Click += (_, _) => SetTool(value);
@@ -70,7 +71,7 @@ public partial class MainWindow : Window
             var dot = new System.Windows.Shapes.Ellipse { Width = 15, Height = 15, Fill = BoardSurface.Brush(value.Color) };
             var button = new Button { Content = dot, Padding = new Thickness(4), Margin = new Thickness(1, 0, 1, 0), BorderThickness = new Thickness(1), ToolTip = value.Name };
             AutomationProperties.SetName(button, value.Name);
-            button.Click += (_, _) => { color = value.Color; ChangeSelected(i => i.Color = color); UpdateProperties(); };
+            button.Click += (_, _) => { color = value.Color; ChangeSelected(i => { i.Color = color; if (i.Fill != null) i.Fill = BoardSurface.FillFor(color); }); UpdateProperties(); };
             colorButtons[value.Color] = button; Palette.Children.Add(button);
         }
     }
@@ -84,7 +85,7 @@ public partial class MainWindow : Window
             pair.Value.Background = pair.Key == tool ? BoardSurface.Brush("#E6EDDF") : Brushes.Transparent;
             pair.Value.Foreground = pair.Key == tool ? BoardSurface.Brush("#48633F") : BoardSurface.Brush("#7B827C");
         }
-        Surface.Cursor = value switch { BoardTool.Text or BoardTool.List => Cursors.IBeam, BoardTool.Select => Cursors.Arrow, BoardTool.Hand => Cursors.Hand, BoardTool.Eraser => Cursors.No, _ => Cursors.Cross };
+        Surface.Cursor = value switch { BoardTool.Text or BoardTool.List or BoardTool.Callout => Cursors.IBeam, BoardTool.Select => Cursors.Arrow, BoardTool.Hand => Cursors.Hand, BoardTool.Eraser => Cursors.No, _ => Cursors.Cross };
         ToolHelp.Text = value switch
         {
             BoardTool.Text => "Клик — текст · Колёсико — шрифт · Пробел + мышь — двигать доску",
@@ -93,6 +94,9 @@ public partial class MainWindow : Window
             BoardTool.Arrow => "Протяните стрелку · Shift — выравнивание · Пробел — двигать доску",
             BoardTool.Eraser => "Ластик удаляет пометку целиком · Закреплённые объекты защищены",
             BoardTool.Hand => "Перетаскивайте поле · Колёсико — вверх/вниз · Shift — влево/вправо",
+            BoardTool.Marker => "Проведите полупрозрачную полосу поверх карты · Колёсико — ширина",
+            BoardTool.Rectangle or BoardTool.Ellipse => "Протяните фигуру · Shift — квадрат/круг · «Заливка» — полупрозрачный цвет",
+            BoardTool.Callout => "Нажмите на место, на которое указывает выноска, и протяните к месту подписи",
             _ => "Перетаскивайте объекты · Двойной клик — текст · Пробел — двигать доску"
         };
         UpdateProperties(); UpdateUi(); Surface.Focus();
@@ -102,8 +106,11 @@ public partial class MainWindow : Window
     {
         if (!ready) return;
         syncing = true;
-        var stroke = tool is BoardTool.Pen or BoardTool.Arrow || Surface.Selected?.Kind is "pen" or "arrow";
+        var stroke = StrokeContext;
         SizeLabel.Text = stroke ? "Толщина" : "Шрифт";
+        var shapes = tool is BoardTool.Rectangle or BoardTool.Ellipse || Surface.SelectedItems.Any(i => i.Kind is "rect" or "ellipse");
+        FillButton.Visibility = shapes ? Visibility.Visible : Visibility.Collapsed;
+        FillButton.Background = fillShapes ? BoardSurface.Brush("#E6EDDF") : Brushes.Transparent;
         SizeValue.Text = (stroke ? strokeSize : fontSize).ToString("0");
         FontChoice.IsEnabled = !stroke;
         FontChoice.SelectedIndex = serif ? 1 : 0;
@@ -126,10 +133,13 @@ public partial class MainWindow : Window
     private void UpdateSelectionUi()
     {
         var selected = Surface.Selected;
-        SelectedLabel.Text = Surface.SelectedItems.Count > 1 ? $"Выбрано: {Surface.SelectedItems.Count}" : selected == null ? "" : selected.Locked ? "Объект закреплён" : selected.Kind switch { "image" => "Карта", "text" => "Надпись", _ => "Пометка" };
+        SelectedLabel.Text = Surface.SelectedItems.Count > 1 ? $"Выбрано: {Surface.SelectedItems.Count}" : selected == null ? "" : selected.Locked ? "Объект закреплён" : selected.Kind switch
+        { "image" => "Карта", "text" => "Надпись", "callout" => "Выноска", "timeline" => "Лента времени", "rect" => "Прямоугольник", "ellipse" => "Овал", "marker" => "Выделение маркером", _ => "Пометка" };
+        if (selected != null && Surface.SelectedItems.Count == 1 && selected.Step > 0) SelectedLabel.Text += $" · шаг {selected.Step}";
         LockButton.IsEnabled = selected != null;
         LockButton.Content = Surface.SelectionLocked ? "Открепить" : "Закрепить";
         BackButton.Visibility = Surface.SelectedItems.Count == 1 && selected?.Kind == "image" && !Surface.SelectionLocked ? Visibility.Visible : Visibility.Collapsed;
+        CropButton.Visibility = RotateButton.Visibility = BackButton.Visibility;
     }
 
     private void Changed(Lesson before)
@@ -162,9 +172,9 @@ public partial class MainWindow : Window
         if (tool == BoardTool.Hand) { BeginPan(e.GetPosition(Viewport)); e.Handled = true; return; }
         CommitEditor();
         var point = BoardPosition(e); var hit = Surface.Hit(point);
-        if (tool is BoardTool.Text or BoardTool.List)
+        if (tool is BoardTool.Text or BoardTool.List || tool == BoardTool.Callout && hit?.Kind == "callout")
         {
-            BeginEditor(hit?.Kind == "text" ? hit : null, point); e.Handled = true; return;
+            BeginEditor(hit?.Kind is "text" or "callout" ? hit : null, point); e.Handled = true; return;
         }
         Surface.Focus();
         if (tool == BoardTool.Select)
@@ -172,7 +182,7 @@ public partial class MainWindow : Window
             // The resize handle extends slightly beyond the image itself.
             var selected = Surface.Selected;
             var rect = Surface.SelectedBounds;
-            resizing = Surface.SelectedItems.Count == 1 && selected?.Kind == "image" && !rect.IsEmpty && (point - new Point(rect.Right + 7 / zoom, rect.Bottom + 7 / zoom)).Length < 14 / zoom;
+            resizing = Surface.SelectedItems.Count == 1 && selected != null && BoardSurface.Resizable(selected) && !rect.IsEmpty && (point - new Point(rect.Right + 7 / zoom, rect.Bottom + 7 / zoom)).Length < 14 / zoom;
             if (resizing) hit = selected;
             if (hit == null)
             {
@@ -183,15 +193,28 @@ public partial class MainWindow : Window
             if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) && !resizing) { Surface.ToggleSelection(hit); UpdateUi(); e.Handled = true; return; }
             if (!Surface.SelectedItems.Contains(hit)) Surface.Select(hit);
             if (Surface.SelectionLocked) { CopyProperties(hit); UpdateUi(); Status.Text = "Выделение содержит закреплённые объекты. Сначала открепите их."; return; }
-            if (hit.Kind == "text" && e.ClickCount == 2) { BeginEditor(hit, point); return; }
+            if (hit.Kind is "text" or "callout" && e.ClickCount == 2) { BeginEditor(hit, point); return; }
+            if (hit.Kind == "timeline" && e.ClickCount == 2) { EditTimeline(hit); e.Handled = true; return; }
             CopyProperties(hit);
             moving = hit; moveOriginal = hit.Clone();
             moveOriginals = Surface.SelectedItems.ToDictionary(i => i.Id, i => i.Clone());
         }
-        else if (tool is BoardTool.Pen or BoardTool.Arrow)
+        else if (tool is BoardTool.Pen or BoardTool.Arrow or BoardTool.Marker)
         {
             Surface.Select(null);
-            draft = new BoardItem { Kind = tool == BoardTool.Pen ? "pen" : "arrow", Color = color, Size = strokeSize, Points = [new(point.X, point.Y)] };
+            draft = new BoardItem { Kind = tool switch { BoardTool.Pen => "pen", BoardTool.Marker => "marker", _ => "arrow" }, Color = color, Size = tool == BoardTool.Marker ? MarkerSize : strokeSize, Points = [new(point.X, point.Y)] };
+            Surface.Preview(draft);
+        }
+        else if (tool is BoardTool.Rectangle or BoardTool.Ellipse)
+        {
+            Surface.Select(null);
+            draft = new BoardItem { Kind = tool == BoardTool.Rectangle ? "rect" : "ellipse", X = point.X, Y = point.Y, Width = 1, Height = 1, Color = color, Size = strokeSize, Fill = fillShapes ? BoardSurface.FillFor(color) : null };
+            Surface.Preview(draft);
+        }
+        else if (tool == BoardTool.Callout)
+        {
+            Surface.Select(null);
+            draft = NewCallout(point, point);
             Surface.Preview(draft);
         }
         gestureBefore = lesson.Clone(); gestureStart = point; gesture = true;
@@ -213,7 +236,13 @@ public partial class MainWindow : Window
         }
         if (draft != null)
         {
-            if (draft.Kind == "arrow")
+            if (draft.Kind is "rect" or "ellipse")
+            {
+                var shape = ShapeRect(gestureStart, point, Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
+                draft.X = shape.X; draft.Y = shape.Y; draft.Width = Math.Max(1, shape.Width); draft.Height = Math.Max(1, shape.Height);
+            }
+            else if (draft.Kind == "callout") MoveCalloutDraft(draft, gestureStart, point);
+            else if (draft.Kind == "arrow")
             {
                 if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
                 {
@@ -228,12 +257,17 @@ public partial class MainWindow : Window
         else if (moving != null && moveOriginal != null)
         {
             var delta = point - gestureStart;
-            if (resizing)
+            if (resizing && moving.Kind == "image")
             {
                 var ratio = moveOriginal.Height / moveOriginal.Width;
                 var width = Math.Max(60, moveOriginal.Width + delta.X);
                 width = Math.Min(width, 100000 / Math.Max(1, ratio));
                 moving.Width = width; moving.Height = width * ratio;
+            }
+            else if (resizing)
+            {
+                moving.Width = Math.Clamp(moveOriginal.Width + delta.X, moving.Kind == "timeline" ? 200 : 8, 100000);
+                if (moving.Kind != "timeline") moving.Height = Math.Clamp(moveOriginal.Height + delta.Y, 8, 100000);
             }
             else
             {
@@ -245,7 +279,7 @@ public partial class MainWindow : Window
     }
 
     private void OnBoardUp(object sender, MouseButtonEventArgs e) { EndPan(); FinishGesture(); e.Handled = true; }
-    private void OnLostCapture(object sender, MouseEventArgs e) { EndPan(); FinishGesture(); }
+    private void OnLostCapture(object sender, MouseEventArgs e) { curtainDragging = false; EndPan(); FinishGesture(); }
 
     private void FinishGesture()
     {
@@ -256,14 +290,21 @@ public partial class MainWindow : Window
             selectingArea = false; Surface.ShowMarquee(Rect.Empty); marqueeStartSelection = [];
             Surface.ReleaseMouseCapture(); UpdateUi(); return;
         }
+        if (draft?.Kind == "callout")
+        {
+            var callout = draft; draft = null; Surface.Preview(null);
+            Surface.ReleaseMouseCapture(); gestureBefore = null;
+            PlaceCallout(callout); return;
+        }
         if (draft != null)
         {
-            if (draft.Kind == "pen" || draft.Points.Count > 1 && (draft.Points[^1].ToPoint() - draft.Points[0].ToPoint()).Length > 4)
+            if (draft.Kind is "rect" or "ellipse" ? draft.Width > 4 && draft.Height > 4 :
+                draft.Kind is "pen" or "marker" || draft.Points.Count > 1 && (draft.Points[^1].ToPoint() - draft.Points[0].ToPoint()).Length > 4)
             { Surface.Add(draft); changed = true; }
             draft = null; Surface.Preview(null);
         }
         else if (moving != null && moveOriginal != null)
-            changed = moving.X != moveOriginal.X || moving.Y != moveOriginal.Y || moving.Width != moveOriginal.Width;
+            changed = moving.X != moveOriginal.X || moving.Y != moveOriginal.Y || moving.Width != moveOriginal.Width || moving.Height != moveOriginal.Height;
         else if (tool == BoardTool.Eraser) changed = gestureBefore?.Items.Count != lesson.Items.Count;
         moving = null; moveOriginal = null; moveOriginals.Clear();
         Surface.ReleaseMouseCapture();
@@ -279,11 +320,11 @@ public partial class MainWindow : Window
         Surface.RemoveMany(group);
     }
 
-    private void BeginEditor(BoardItem? item, Point point)
+    private void BeginEditor(BoardItem? item, Point point, BoardItem? created = null)
     {
         if (item != null && Surface.GroupMembers(item).Any(i => i.Locked)) { Surface.Select(item); UpdateUi(); Status.Text = "Эта надпись закреплена. Сначала нажмите «Открепить»."; return; }
         editBefore = lesson.Clone();
-        editing = item ?? new BoardItem { Kind = "text", X = point.X, Y = point.Y, Width = Math.Clamp(Viewport.ActualWidth * .8 / zoom, 600, 1200), Size = fontSize, Color = color, Bold = bold, Serif = serif, Numbered = tool == BoardTool.List };
+        editing = item ?? created ?? new BoardItem { Kind = "text", X = point.X, Y = point.Y, Width = Math.Clamp(Viewport.ActualWidth * .8 / zoom, 600, 1200), Size = fontSize, Color = color, Bold = bold, Serif = serif, Numbered = tool == BoardTool.List };
         if (item == null) Surface.Add(editing);
         CopyProperties(editing); Surface.Select(null); Surface.HideItem(editing, true);
         Editor.Text = editing.Text;
@@ -334,16 +375,16 @@ public partial class MainWindow : Window
     private void CopyProperties(BoardItem item)
     {
         color = item.Color;
-        if (item.Kind == "text") { fontSize = item.Size; bold = item.Bold; serif = item.Serif; }
-        else if (item.Kind is "pen" or "arrow") strokeSize = item.Size;
+        if (BoardItem.IsTextual(item.Kind)) { fontSize = Math.Clamp(item.Size, 12, 160); bold = item.Bold; serif = item.Serif; }
+        else if (item.Kind == "marker") strokeSize = Math.Clamp(Math.Round(item.Size / 5), 1, 30);
+        else if (BoardItem.IsStroke(item.Kind)) { strokeSize = item.Size; if (item.Kind is "rect" or "ellipse") fillShapes = item.Fill != null; }
         UpdateProperties();
     }
 
     private void AdjustSize(double step)
     {
-        var stroke = tool is BoardTool.Pen or BoardTool.Arrow || Surface.Selected?.Kind is "pen" or "arrow";
-        if (stroke) strokeSize = Math.Clamp(strokeSize + step, 1, 30); else fontSize = Math.Clamp(fontSize + step * 2, 12, 160);
-        ChangeSelected(i => i.Size = i.Kind is "pen" or "arrow" ? strokeSize : fontSize);
+        if (StrokeContext) strokeSize = Math.Clamp(strokeSize + step, 1, 30); else fontSize = Math.Clamp(fontSize + step * 2, 12, 160);
+        ChangeSelected(i => i.Size = i.Kind == "marker" ? MarkerSize : BoardItem.IsStroke(i.Kind) ? strokeSize : fontSize);
         UpdateProperties();
     }
     private void OnSizeDown(object sender, RoutedEventArgs e) => AdjustSize(-1);
@@ -353,10 +394,10 @@ public partial class MainWindow : Window
 
     private void OnWheel(object sender, MouseWheelEventArgs e)
     {
-        if (presenting) { e.Handled = true; return; }
+        if (presenting) { AdjustPresentationTool(e.Delta); e.Handled = true; return; }
         StopCameraAnimation();
         if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) ZoomAt(zoom * (e.Delta > 0 ? 1.1 : 1 / 1.1), e.GetPosition(Viewport));
-        else if (tool is BoardTool.Text or BoardTool.List or BoardTool.Pen or BoardTool.Arrow || editing != null) AdjustSize(e.Delta > 0 ? 1 : -1);
+        else if (tool is not (BoardTool.Select or BoardTool.Hand or BoardTool.Eraser) || editing != null) AdjustSize(e.Delta > 0 ? 1 : -1);
         else if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) SetCamera(cameraX - e.Delta / zoom, cameraY, zoom);
         else SetCamera(cameraX, cameraY - e.Delta / zoom, zoom);
         e.Handled = true;
@@ -546,6 +587,9 @@ public partial class MainWindow : Window
         var all = new MenuItem { Header = "Все объекты доски" }; all.Click += (_, _) => ExportRegion(null); menu.Items.Add(all);
         var frame = new MenuItem { Header = "Выбранный кадр", IsEnabled = activeFrame >= 0 && activeFrame < lesson.Frames.Count };
         frame.Click += (_, _) => { if (activeFrame >= 0 && activeFrame < lesson.Frames.Count) ExportRegion(lesson.Frames[activeFrame].Bounds); }; menu.Items.Add(frame);
+        menu.Items.Add(new Separator());
+        var pdf = new MenuItem { Header = "Все кадры в PDF…", IsEnabled = lesson.Frames.Count > 0, ToolTip = lesson.Frames.Count > 0 ? "Каждый кадр — отдельная страница, для печати и раздачи" : "Сначала добавьте кадры кнопкой «＋ Кадр»" };
+        pdf.Click += (_, _) => OnExportPdf(); menu.Items.Add(pdf);
         menu.PlacementTarget = (UIElement)sender; menu.IsOpen = true;
     }
     private void ExportRegion(Rect? region)
@@ -573,7 +617,7 @@ public partial class MainWindow : Window
         var textInput = Keyboard.FocusedElement is TextBox;
         if (key == Key.Escape)
         {
-            if (presenting) { EndPresentation(); e.Handled = true; }
+            if (presenting) { if (Overlay.Mode != PresentationTool.None) SetPresentationTool(PresentationTool.None); else EndPresentation(); e.Handled = true; }
             else if (!textInput) { if (fullscreen) ToggleFullscreen(); else { Surface.Select(null); UpdateUi(); } e.Handled = true; }
             return;
         }

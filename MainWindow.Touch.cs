@@ -71,7 +71,7 @@ public partial class MainWindow
         if (presenting)
         {
             var delta = point - swipeStart;
-            if (wasPrimary && Math.Abs(delta.X) > SwipeDistance && Math.Abs(delta.X) > Math.Abs(delta.Y) * 1.5) NextFrame(delta.X < 0 ? 1 : -1);
+            if (wasPrimary && Math.Abs(delta.X) > SwipeDistance && Math.Abs(delta.X) > Math.Abs(delta.Y) * 1.5) PresentStep(delta.X < 0 ? 1 : -1);
             return;
         }
         if (!touchNavigating) return;

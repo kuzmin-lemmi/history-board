@@ -8,7 +8,7 @@ using System.Windows.Media.Imaging;
 
 namespace HistoryBoard;
 
-public enum BoardTool { Select, Hand, Text, List, Pen, Arrow, Eraser }
+public enum BoardTool { Select, Hand, Text, List, Pen, Arrow, Eraser, Marker, Rectangle, Ellipse, Callout }
 
 public sealed class BoardItem
 {
@@ -28,7 +28,22 @@ public sealed class BoardItem
     public string? GroupId { get; set; }
     public string? AssetId { get; set; }
     public List<BoardPoint> Points { get; set; } = [];
-    public BoardItem Clone() => new() { Id = Id, Kind = Kind, X = X, Y = Y, Width = Width, Height = Height, Text = Text, Color = Color, Size = Size, Bold = Bold, Serif = Serif, Numbered = Numbered, Locked = Locked, GroupId = GroupId, AssetId = AssetId, Points = Points.ToList() };
+    /// <summary>Semi-transparent fill of rectangles and ellipses, or null for an outline.</summary>
+    public string? Fill { get; set; }
+    /// <summary>Image rotation in degrees: 0, 90, 180 or 270.</summary>
+    public int Rotation { get; set; }
+    /// <summary>Visible part of an image, as fractions of the source picture.</summary>
+    public double CropX { get; set; }
+    public double CropY { get; set; }
+    public double CropWidth { get; set; } = 1;
+    public double CropHeight { get; set; } = 1;
+    /// <summary>Presentation reveal step: 0 — always visible, 1..99 — appears on that click within a frame.</summary>
+    public int Step { get; set; }
+    public BoardItem Clone() => new() { Id = Id, Kind = Kind, X = X, Y = Y, Width = Width, Height = Height, Text = Text, Color = Color, Size = Size, Bold = Bold, Serif = Serif, Numbered = Numbered, Locked = Locked, GroupId = GroupId, AssetId = AssetId, Points = Points.ToList(),
+        Fill = Fill, Rotation = Rotation, CropX = CropX, CropY = CropY, CropWidth = CropWidth, CropHeight = CropHeight, Step = Step };
+    public bool IsCropped => CropX != 0 || CropY != 0 || CropWidth != 1 || CropHeight != 1;
+    public static bool IsStroke(string kind) => kind is "pen" or "arrow" or "marker" or "rect" or "ellipse";
+    public static bool IsTextual(string kind) => kind is "text" or "callout" or "timeline";
 }
 
 public record struct BoardPoint(double X, double Y) { public Point ToPoint() => new(X, Y); }
@@ -75,6 +90,13 @@ public static class LessonFile
     public const long MaxAssetBytes = MaxFileSize - MaxJsonSize;
     public const int WorkingImageWidth = 3600;
     public const string BackupExtension = ".bak";
+    public const int CurrentVersion = 3;
+    public static readonly string[] Kinds = ["text", "image", "pen", "arrow", "marker", "rect", "ellipse", "callout", "timeline"];
+
+    // Version 3 adds shapes, markers, callouts, timelines, image crop/rotation and reveal steps.
+    // Lessons that use none of them are still written as version 2 so that 1.2 can open them.
+    public static int RequiredVersion(Lesson lesson) =>
+        lesson.Items.Any(i => i.Kind is "marker" or "rect" or "ellipse" or "callout" or "timeline" || i.Fill != null || i.Rotation != 0 || i.IsCropped || i.Step != 0) ? 3 : 2;
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
     public static string BackupPath(string path) => path + BackupExtension;
@@ -89,6 +111,7 @@ public static class LessonFile
         path = Path.GetFullPath(path);
         var directory = Path.GetDirectoryName(path)!;
         Directory.CreateDirectory(directory);
+        lesson.Version = RequiredVersion(lesson);
         var json = JsonSerializer.SerializeToUtf8Bytes(lesson, JsonOptions);
         if (json.Length > MaxJsonSize) throw new InvalidDataException("Слишком много данных на доске. Удалите часть пометок или разделите урок на несколько файлов.");
         var ids = lesson.Items.Where(i => i.AssetId != null).Select(i => i.AssetId!).Distinct().ToArray();
@@ -143,7 +166,7 @@ public static class LessonFile
         using (var stream = entry.Open()) lesson = JsonSerializer.Deserialize<Lesson>(stream) ?? throw new InvalidDataException("Пустой файл.");
         Validate(lesson);
         if (lesson.Version == 1) lesson.View = null;
-        lesson.Version = 2;
+        lesson.Version = Math.Max(2, lesson.Version);
         var assets = new Dictionary<string, byte[]>();
         foreach (var id in lesson.Items.Where(i => i.AssetId != null).Select(i => i.AssetId!).Distinct())
         {
@@ -160,7 +183,7 @@ public static class LessonFile
 
     public static void Validate(Lesson lesson)
     {
-        if (lesson.Version is not (1 or 2)) throw new InvalidDataException("Эта версия урока не поддерживается.");
+        if (lesson.Version is < 1 or > CurrentVersion) throw new InvalidDataException("Эта версия урока не поддерживается.");
         if (lesson.Title == null || lesson.Title.Length > 1000) throw new InvalidDataException("Некорректное название урока.");
         if (lesson.Paper is not ("grid" or "dots" or "ruled" or "plain" or "white")) throw new InvalidDataException("Некорректный фон доски.");
         if (lesson.View is { } view && (!Coordinate(view.X) || !Coordinate(view.Y) || !double.IsFinite(view.Zoom) || view.Zoom < .02 || view.Zoom > 8))
@@ -176,7 +199,7 @@ public static class LessonFile
         var ids = new HashSet<string>();
         foreach (var i in lesson.Items)
         {
-            if (i == null || string.IsNullOrEmpty(i.Id) || !ids.Add(i.Id) || i.Kind is not ("text" or "image" or "pen" or "arrow") || i.Text == null || i.Text.Length > 100000 || i.Points == null || i.Points.Count > 100000 ||
+            if (i == null || string.IsNullOrEmpty(i.Id) || !ids.Add(i.Id) || !Kinds.Contains(i.Kind) || i.Text == null || i.Text.Length > 100000 || i.Points == null || i.Points.Count > 100000 ||
                 !Coordinate(i.X) || !Coordinate(i.Y) || new[] { i.Width, i.Height, i.Size }.Any(n => !double.IsFinite(n) || Math.Abs(n) > 100000) || i.Size < 1 || i.Size > 300 || i.Width <= 0 || i.Height <= 0 ||
                 i.Points.Any(p => !Coordinate(p.X) || !Coordinate(p.Y)) ||
                 i.GroupId is { } groupId && (groupId.Length != 32 || groupId.Any(c => !Uri.IsHexDigit(c))) ||
@@ -184,6 +207,11 @@ public static class LessonFile
                 throw new InvalidDataException("Урок содержит некорректный объект.");
             try { ColorConverter.ConvertFromString(i.Color); } catch { throw new InvalidDataException("Некорректный цвет."); }
             if (i.Kind == "image" && i.AssetId == null) throw new InvalidDataException("Не указана карта.");
+            if (i.Fill != null) { if (i.Fill.Length > 9) throw new InvalidDataException("Некорректная заливка."); try { ColorConverter.ConvertFromString(i.Fill); } catch { throw new InvalidDataException("Некорректная заливка."); } }
+            if (i.Rotation is not (0 or 90 or 180 or 270) || i.Step is < 0 or > 99 ||
+                new[] { i.CropX, i.CropY, i.CropWidth, i.CropHeight }.Any(n => !double.IsFinite(n) || n < 0 || n > 1) || i.CropWidth < .01 || i.CropHeight < .01 || i.CropX + i.CropWidth > 1.000001 || i.CropY + i.CropHeight > 1.000001)
+                throw new InvalidDataException("Урок содержит некорректный объект.");
+            if (i.Kind == "callout" && i.Points.Count != 1) throw new InvalidDataException("У выноски нет указателя.");
         }
     }
 

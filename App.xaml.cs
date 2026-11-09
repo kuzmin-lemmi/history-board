@@ -17,7 +17,7 @@ public partial class App : Application
             File.Delete(Path.Combine(DataDirectory, "failure.txt"));
             var window = new MainWindow(false); MainWindow = window; window.Show();
             try { await window.RunSelfTests(DataDirectory); Shutdown(0); }
-            catch (Exception ex) { File.WriteAllText(Path.Combine(DataDirectory, "failure.txt"), ex.ToString()); Shutdown(1); }
+            catch (Exception ex) { File.WriteAllText(Path.Combine(DataDirectory, "failure.txt"), ex.ToString()); window.CloseWithoutPrompt(); Shutdown(1); }
             return;
         }
         if (e.Args.Contains("--uninstall")) { Installer.Uninstall(); Shutdown(); return; }

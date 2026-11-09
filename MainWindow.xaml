@@ -14,7 +14,8 @@
           <Button x:Name="NewLessonButton" Content="Новый" FontSize="12" Padding="9,6" Click="OnNew"/>
           <Button x:Name="LibraryButton" Content="Уроки" FontSize="12" Padding="9,6" Click="OnLibrary"/>
           <Button x:Name="AddImageButton" Content="＋ Карта" FontSize="12" Padding="9,6" Click="OnAddMap"/>
-          <Button Content="PNG ▾" FontSize="12" Padding="9,6" Click="OnExport" ToolTip="Экспорт доски или кадра в PNG"/>
+          <Button x:Name="TimelineButton" Content="＋ Лента" FontSize="12" Padding="9,6" Click="OnAddTimeline"/>
+          <Button Content="Экспорт ▾" FontSize="12" Padding="9,6" Click="OnExport" ToolTip="PNG текущего вида, кадра или всей доски; все кадры в PDF"/>
           <Button Content="Фон ▾" FontSize="12" Padding="9,6" Click="OnPaper" ToolTip="Клетка, точки, линейка и однотонный лист"/>
           <Button x:Name="SaveButton" Content="Сохранить" FontSize="12" Padding="13,6" Background="#58725B" Foreground="White" Click="OnSave" Margin="7,0"/>
           <Button x:Name="PresentButton" Content="▷ Показ" FontSize="12" Padding="12,6" Background="#EDF2E7" Click="OnPresent"/>
@@ -36,12 +37,15 @@
           <Button Content="+" Click="OnSizeUp" FontSize="16" Padding="7,1"/>
           <ComboBox x:Name="FontChoice" SelectedIndex="0" Width="127" FontSize="11" Margin="10,0,5,0" SelectionChanged="OnFontChanged"><ComboBoxItem Content="Без засечек"/><ComboBoxItem Content="С засечками"/></ComboBox>
           <Button x:Name="BoldButton" Content="Ж" FontWeight="Bold" Padding="9,3" Click="OnBold" ToolTip="Полужирный · Ctrl+B"/>
+          <Button x:Name="FillButton" Content="◧ Заливка" FontSize="11" Padding="8,3" Margin="4,0,0,0" Visibility="Collapsed" Click="OnFill" ToolTip="Полупрозрачная заливка прямоугольников и овалов"/>
           <Border Width="1" Height="17" Background="#DFE5D9" Margin="10,0"/>
           <StackPanel x:Name="Palette" Orientation="Horizontal" VerticalAlignment="Center"/>
         </StackPanel>
         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
           <Button Content="Действия ▾" FontSize="11" Padding="8,4" Click="OnSelectionActions" ToolTip="Копировать, дублировать, группировать и выделить всё"/>
           <TextBlock x:Name="SelectedLabel" Text="" MaxWidth="150" TextTrimming="CharacterEllipsis" FontSize="10" Foreground="#8A9581" VerticalAlignment="Center" Margin="4,0,8,0"/>
+          <Button x:Name="CropButton" Content="Кадрировать" FontSize="11" Padding="8,4" Visibility="Collapsed" Click="OnCrop" ToolTip="Оставить нужную часть карты"/>
+          <Button x:Name="RotateButton" Content="Повернуть ↻" FontSize="11" Padding="8,4" Visibility="Collapsed" Click="OnRotate" ToolTip="Повернуть карту на 90° по часовой стрелке"/>
           <Button x:Name="BackButton" Content="На фон" FontSize="11" Padding="8,4" Visibility="Collapsed" Click="OnSendBack"/>
           <Button x:Name="LockButton" Content="Закрепить" FontSize="11" Padding="8,4" IsEnabled="False" Click="OnLock" ToolTip="Защитить объект от перемещения и удаления · Ctrl+L"/>
           <Button x:Name="DeleteButton" Content="Удалить" FontSize="11" Foreground="#8A9581" Padding="8,4" Click="OnDelete"/>
@@ -54,7 +58,8 @@
         <DockPanel Margin="4,9,4,7"><Button DockPanel.Dock="Bottom" Content="?" FontSize="17" Padding="5,4" Foreground="#7B827C" Click="OnHelp" ToolTip="Помощь"/><StackPanel x:Name="Tools"/></DockPanel>
       </Border>
       <Grid x:Name="Viewport" Grid.Column="1" Background="#FAF7EF" ClipToBounds="True" SizeChanged="OnViewportChanged" PreviewMouseWheel="OnWheel" TouchDown="OnViewportTouchDown" TouchMove="OnViewportTouchMove" TouchUp="OnViewportTouchUp" LostTouchCapture="OnViewportLostTouchCapture" Stylus.IsPressAndHoldEnabled="False" Stylus.IsFlicksEnabled="False" Stylus.IsTapFeedbackEnabled="False">
-        <local:BoardSurface x:Name="Surface" PreviewMouseDown="OnSurfaceMouseDown" PreviewMouseUp="OnSurfaceMouseUp" MouseLeftButtonDown="OnBoardDown" MouseMove="OnBoardMove" MouseLeftButtonUp="OnBoardUp" LostMouseCapture="OnLostCapture"/>
+        <local:BoardSurface x:Name="Surface" PreviewMouseDown="OnSurfaceMouseDown" PreviewMouseUp="OnSurfaceMouseUp" PreviewMouseMove="OnSurfacePreviewMove" MouseLeftButtonDown="OnBoardDown" MouseMove="OnBoardMove" MouseLeftButtonUp="OnBoardUp" LostMouseCapture="OnLostCapture"/>
+        <local:PresentationOverlay x:Name="Overlay" IsHitTestVisible="False" Visibility="Collapsed"/>
         <StackPanel x:Name="EmptyHint" IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,30">
           <TextBlock Text="Место для большой истории" FontSize="25" FontWeight="SemiBold" Foreground="#7C8C70" HorizontalAlignment="Center"/>
           <TextBlock Text="Кликните и пишите. Добавьте карту. Продолжайте в любую сторону." FontSize="13" Foreground="#A0AA98" HorizontalAlignment="Center" Margin="0,12,0,0"/>
@@ -67,7 +72,7 @@
           <StackPanel Orientation="Horizontal"><Button Content="−" FontSize="17" Padding="8,1" Click="OnZoomOut"/><TextBlock x:Name="ZoomValue" Text="100%" Width="42" VerticalAlignment="Center" TextAlignment="Center" FontSize="11"/><Button Content="+" FontSize="17" Padding="8,1" Click="OnZoomIn"/><Border Width="1" Height="15" Background="#E1E7DA" Margin="5,0"/><Button x:Name="FitButton" Content="Всё" FontSize="11" Click="OnFit" Padding="10,4"/></StackPanel>
         </Border>
         <Border x:Name="PresentationControls" Visibility="Collapsed" VerticalAlignment="Bottom" HorizontalAlignment="Center" Background="#F5FFFFFF" BorderBrush="#DFE5D9" BorderThickness="1" CornerRadius="9" Margin="0,0,0,14" Padding="5,3">
-          <StackPanel Orientation="Horizontal"><Button Content="←" FontSize="19" Padding="12,3" Click="OnPreviousFrame"/><TextBlock x:Name="PresentationLabel" Text="1 / 1" MinWidth="160" MaxWidth="350" TextTrimming="CharacterEllipsis" TextAlignment="Center" VerticalAlignment="Center" FontSize="12"/><Button Content="→" FontSize="19" Padding="12,3" Click="OnNextFrame"/><Border Width="1" Height="19" Background="#DFE5D9" Margin="8,0"/><Button Content="Завершить · Esc" Padding="10,6" FontSize="11" Click="OnEndPresentation"/></StackPanel>
+          <StackPanel Orientation="Horizontal"><Button Content="←" FontSize="19" Padding="12,3" Click="OnPreviousFrame"/><TextBlock x:Name="PresentationLabel" Text="1 / 1" MinWidth="160" MaxWidth="350" TextTrimming="CharacterEllipsis" TextAlignment="Center" VerticalAlignment="Center" FontSize="12"/><Button Content="→" FontSize="19" Padding="12,3" Click="OnNextFrame"/><Border Width="1" Height="19" Background="#DFE5D9" Margin="8,0"/><Border Width="1" Height="19" Background="#DFE5D9" Margin="8,0"/><Button x:Name="PointerButton" Content="● Указка" Padding="9,6" FontSize="11" Click="OnPointerTool"/><Button x:Name="SpotlightButton" Content="◎ Прожектор" Padding="9,6" FontSize="11" Click="OnSpotlightTool"/><Button x:Name="CurtainButton" Content="▤ Шторка" Padding="9,6" FontSize="11" Click="OnCurtainTool"/><Border Width="1" Height="19" Background="#DFE5D9" Margin="8,0"/><Button Content="Завершить · Esc" Padding="10,6" FontSize="11" Click="OnEndPresentation"/></StackPanel>
         </Border>
       </Grid>
     </Grid>

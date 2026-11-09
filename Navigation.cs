@@ -87,12 +87,13 @@ public partial class MainWindow
 
     private void OnSurfaceMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (presenting) { e.Handled = true; return; }
+        if (presenting) { BeginCurtainDrag(e); e.Handled = true; return; }
         if (e.ChangedButton == MouseButton.Middle || e.ChangedButton == MouseButton.Left && spaceHeld)
         { BeginPan(e.GetPosition(Viewport)); e.Handled = true; }
     }
     private void OnSurfaceMouseUp(object sender, MouseButtonEventArgs e)
     {
+        if (curtainDragging) { EndCurtainDrag(); e.Handled = true; return; }
         if (panning && e.ChangedButton is MouseButton.Left or MouseButton.Middle) { EndPan(); e.Handled = true; }
     }
 
@@ -177,6 +178,7 @@ public partial class MainWindow
         CommitEditor(); FinishGesture(); EndPan();
         activeFrame = index; Surface.Select(null); FocusRegion(lesson.Frames[index].Bounds, animate);
         UpdateFrameSelection();
+        if (presenting) ApplyReveal();
         if (frameButtons.TryGetValue(lesson.Frames[index].Id, out var button)) button.BringIntoView();
         Surface.Focus();
     }
@@ -185,8 +187,8 @@ public partial class MainWindow
         if (lesson.Frames.Count == 0) return;
         GoToFrame(activeFrame < 0 ? direction > 0 ? 0 : lesson.Frames.Count - 1 : Math.Clamp(activeFrame + direction, 0, lesson.Frames.Count - 1));
     }
-    private void OnPreviousFrame(object sender, RoutedEventArgs e) => NextFrame(-1);
-    private void OnNextFrame(object sender, RoutedEventArgs e) => NextFrame(1);
+    private void OnPreviousFrame(object sender, RoutedEventArgs e) => PresentStep(-1);
+    private void OnNextFrame(object sender, RoutedEventArgs e) => PresentStep(1);
 
     private void RenameFrame(LessonFrame frame)
     {
@@ -223,7 +225,9 @@ public partial class MainWindow
         if (presenting) return;
         CommitEditor(); FinishGesture(); EndPan(); StopCameraAnimation();
         if (lesson.Frames.Count == 0) AddFrame();
-        presenting = true; presentationWasFullscreen = fullscreen;
+        presenting = true; presentationWasFullscreen = fullscreen; revealStep = 0;
+        Surface.Select(null); Surface.ShowStepBadges = false; Surface.Redraw();
+        Overlay.Visibility = Visibility.Visible; Overlay.HasPointer = false; SetPresentationTool(PresentationTool.None);
         MainHeader.Visibility = PropertyBar.Visibility = ToolRail.Visibility = FramesTray.Visibility = StatusBar.Visibility = ZoomControls.Visibility = Visibility.Collapsed;
         ToolColumn.Width = new GridLength(0); PresentationControls.Visibility = Visibility.Visible;
         if (!fullscreen) ToggleFullscreen();
@@ -232,7 +236,8 @@ public partial class MainWindow
     private void EndPresentation()
     {
         if (!presenting) return;
-        StopCameraAnimation(); presenting = false;
+        StopCameraAnimation(); SetPresentationTool(PresentationTool.None); EndCurtainDrag(); presenting = false;
+        Overlay.Visibility = Visibility.Collapsed; ShowAllSteps(); Surface.ShowStepBadges = true; Surface.Redraw(); RestoreToolCursor();
         MainHeader.Visibility = PropertyBar.Visibility = ToolRail.Visibility = FramesTray.Visibility = StatusBar.Visibility = ZoomControls.Visibility = Visibility.Visible;
         ToolColumn.Width = new GridLength(48); PresentationControls.Visibility = Visibility.Collapsed;
         if (fullscreen != presentationWasFullscreen) ToggleFullscreen();

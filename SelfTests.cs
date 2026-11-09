@@ -13,7 +13,7 @@ public partial class MainWindow
     internal async Task RunSelfTests(string directory)
     {
         var checks = new List<string>();
-        void Check(bool condition, string name) { if (!condition) throw new InvalidOperationException("FAILED: " + name); checks.Add(name); }
+        void Check(bool condition, string name) { if (!condition) throw new InvalidOperationException("FAILED: " + name + " | status: " + Status.Text); checks.Add(name); }
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         var workspaceRatio = Viewport.ActualWidth * Viewport.ActualHeight / (((FrameworkElement)Content).ActualWidth * ((FrameworkElement)Content).ActualHeight);
         CaptureWindow(Path.Combine(directory, "01-empty-board.png"));
@@ -166,6 +166,7 @@ public partial class MainWindow
         RunPaperFeatureTests(directory, Check);
         await RunShortcutFeatureTests(directory, Check);
         await RunReliabilityFeatureTests(directory, Check);
+        await RunTeachingFeatureTests(directory, Check);
 
         var performance = new Stopwatch(); performance.Start();
         var stressLesson = new Lesson();

@@ -33,7 +33,8 @@ public partial class MainWindow
                 BoardCommand.Present => PresentButton, BoardCommand.Fullscreen => FullscreenButton,
                 BoardCommand.Fit => FitButton, BoardCommand.AddFrame => AddFrameButton,
                 BoardCommand.NextFrame => NextFrameButton, BoardCommand.PreviousFrame => PreviousFrameButton,
-                BoardCommand.Settings => SettingsButton, _ => null
+                BoardCommand.Settings => SettingsButton, BoardCommand.AddTimeline => TimelineButton,
+                BoardCommand.PresentationPointer => PointerButton, BoardCommand.PresentationSpotlight => SpotlightButton, BoardCommand.PresentationCurtain => CurtainButton, _ => null
             };
             if (button != null) button.ToolTip = definition.Name + " · " + shortcuts.Display(definition.Command);
         }
@@ -43,14 +44,15 @@ public partial class MainWindow
 
     private static readonly (BoardTool Tool, BoardCommand Command)[] ToolCommands =
     [ (BoardTool.Select, BoardCommand.SelectTool), (BoardTool.Hand, BoardCommand.HandTool), (BoardTool.Text, BoardCommand.TextTool),
-      (BoardTool.List, BoardCommand.ListTool), (BoardTool.Pen, BoardCommand.PenTool), (BoardTool.Arrow, BoardCommand.ArrowTool), (BoardTool.Eraser, BoardCommand.EraserTool) ];
+      (BoardTool.List, BoardCommand.ListTool), (BoardTool.Pen, BoardCommand.PenTool), (BoardTool.Arrow, BoardCommand.ArrowTool), (BoardTool.Eraser, BoardCommand.EraserTool),
+      (BoardTool.Marker, BoardCommand.MarkerTool), (BoardTool.Rectangle, BoardCommand.RectangleTool), (BoardTool.Ellipse, BoardCommand.EllipseTool), (BoardTool.Callout, BoardCommand.CalloutTool) ];
 
     private void ShowShortcutHelp()
     {
         BoardCommand[] commands = [BoardCommand.Save, BoardCommand.Open, BoardCommand.Undo, BoardCommand.Redo, BoardCommand.Copy, BoardCommand.Paste, BoardCommand.Duplicate, BoardCommand.Group, BoardCommand.Ungroup, BoardCommand.Present, BoardCommand.Fullscreen];
         var keys = string.Join("\n", commands.Select(c => ShortcutProfile.Definitions.Single(d => d.Command == c).Name + " — " + shortcuts.Display(c)));
         MessageBox.Show(this, "ВАШИ ГОРЯЧИЕ КЛАВИШИ\n" + keys +
-            "\n\nКнопка ⚙ открывает настройки всех сочетаний. В текстовых полях работают обычные команды ввода.\n\nДОСКА\nПробел + мышь, средняя кнопка или «Рука» перемещают поле. Ctrl + колёсико меняет масштаб. Рамка инструментом «Выбор» и Shift+клик выделяют несколько объектов. Двойной клик редактирует текст. Уголок изображения меняет его размер.\n\nУРОКИ И ПОКАЗ\n«Уроки» открывает библиотеку с поиском. «Фон» меняет бумагу. Кнопка «＋ Кадр» запоминает текущий вид. Esc завершает ввод или показ; PNG экспортирует материалы с выбранным фоном.",
+            "\n\nКнопка ⚙ открывает настройки всех сочетаний. В текстовых полях работают обычные команды ввода.\n\nДОСКА\nПробел + мышь, средняя кнопка или «Рука» перемещают поле. Ctrl + колёсико меняет масштаб. Рамка инструментом «Выбор» и Shift+клик выделяют несколько объектов. Двойной клик редактирует текст. Уголок изображения меняет его размер.\n\nИСТОРИЯ НА ДОСКЕ\n«＋ Лента» — лента времени из строк «дата — событие». Прямоугольник, овал и «Заливка» выделяют районы карты, маркер подчёркивает, выноска подписывает место. У выделенной карты — «Кадрировать» и «Повернуть».\n\nУРОКИ И ПОКАЗ\n«Уроки» открывает библиотеку с поиском. «Фон» меняет бумагу. Кнопка «＋ Кадр» запоминает текущий вид. В показе: указка (P), прожектор (S), шторка (B); «Действия → Появление в показе» задаёт порядок появления объектов. Esc завершает ввод или показ; «Экспорт» сохраняет PNG или все кадры в PDF.",
             "Как пользоваться доской", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
@@ -82,10 +84,16 @@ public partial class MainWindow
             case BoardCommand.Present: if (presenting) EndPresentation(); else StartPresentation(); break;
             case BoardCommand.Fullscreen: ToggleFullscreen(); break;
             case BoardCommand.Settings: OnSettings(this, new RoutedEventArgs()); break;
-            case BoardCommand.NextFrame: case BoardCommand.PresentationNext: NextFrame(1); break;
-            case BoardCommand.PreviousFrame: case BoardCommand.PresentationPrevious: NextFrame(-1); break;
-            case BoardCommand.PresentationFirst: GoToFrame(0); break;
-            case BoardCommand.PresentationLast: GoToFrame(lesson.Frames.Count - 1); break;
+            case BoardCommand.NextFrame: NextFrame(1); break;
+            case BoardCommand.PreviousFrame: NextFrame(-1); break;
+            case BoardCommand.PresentationNext: PresentStep(1); break;
+            case BoardCommand.PresentationPrevious: PresentStep(-1); break;
+            case BoardCommand.PresentationFirst: revealStep = 0; GoToFrame(0); break;
+            case BoardCommand.PresentationLast: revealStep = 0; GoToFrame(lesson.Frames.Count - 1); break;
+            case BoardCommand.AddTimeline: OnAddTimeline(this, new RoutedEventArgs()); break;
+            case BoardCommand.PresentationPointer: TogglePresentationTool(PresentationTool.Pointer); break;
+            case BoardCommand.PresentationSpotlight: TogglePresentationTool(PresentationTool.Spotlight); break;
+            case BoardCommand.PresentationCurtain: TogglePresentationTool(PresentationTool.Curtain); break;
             default: SetTool(ToolCommands.Single(p => p.Command == command).Tool); break;
         }
         return true;

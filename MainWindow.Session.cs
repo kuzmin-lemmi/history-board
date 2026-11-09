@@ -15,6 +15,8 @@ public partial class MainWindow
     private string SessionPath => Path.Combine(App.DataDirectory, "last-lesson.json");
     private string AutosaveHistoryDirectory => Path.Combine(App.DataDirectory, "autosave-history");
     private bool HasUnsavedChanges => revision != savedRevision;
+    // Used by the self-test runner, which must never wait for a dialog.
+    internal void CloseWithoutPrompt() { closing = true; autosaveTimer.Stop(); }
 
     private static DateTime? WriteTime(string? path)
     {
