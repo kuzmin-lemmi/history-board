@@ -7,6 +7,15 @@ public partial class App : Application
 {
     public static string DataDirectory { get; private set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HistoryBoard", "Data");
 
+    // The same executable is the installer and the board. Downloaded release files
+    // ("HistoryBoard-Setup-win-x64.exe", also "… (1).exe" from browsers) and the local
+    // "Установить доску.exe" open the installer; any other name opens the board.
+    internal static bool IsInstallerName(string path)
+    {
+        var name = Path.GetFileNameWithoutExtension(path);
+        return name.StartsWith("Установить", StringComparison.OrdinalIgnoreCase) || name.Contains("setup", StringComparison.OrdinalIgnoreCase);
+    }
+
     private async void OnStartup(object sender, StartupEventArgs e)
     {
         var dataIndex = Array.IndexOf(e.Args, "--data-dir");
@@ -34,7 +43,7 @@ public partial class App : Application
             catch (Exception) { MessageBox.Show("Предыдущая версия ещё работает. Закройте доску и запустите скачанный установщик снова.", "Доска истории"); Shutdown(1); return; }
         }
         var executable = Environment.ProcessPath ?? "";
-        if (e.Args.Contains("--install") || Path.GetFileNameWithoutExtension(executable).StartsWith("Установить", StringComparison.OrdinalIgnoreCase))
+        if (e.Args.Contains("--install") || IsInstallerName(executable))
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             Installer.ShowInstaller(); Shutdown(); return;

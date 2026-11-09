@@ -15,6 +15,10 @@ public partial class MainWindow
         Surface.SetLesson(lesson, assets); LessonTitle.Text = lesson.Title; UpdateUi(); SetCamera(0, 0, 1);
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
 
+        check(App.IsInstallerName(@"C:\Users\u\Downloads\HistoryBoard-Setup-win-x64.exe") && App.IsInstallerName(@"C:\Users\u\Downloads\HistoryBoard-Setup-win-x64 (1).exe") && App.IsInstallerName("Установить доску.exe"),
+            "The downloaded release file opens the installer, also when the browser adds a number to its name");
+        check(!App.IsInstallerName(@"C:\Users\u\AppData\Local\Programs\HistoryBoard\Историческая доска.exe") && !App.IsInstallerName("Доска истории.exe"), "The installed and portable copies open the board");
+
         // ---- Text input: Enter finishes, Shift+Enter breaks the line ----
         SetTool(BoardTool.Text); BeginEditor(null, new Point(100, 80));
         check(Status.Text.Contains("Enter — готово") && Status.Text.Contains("Shift+Enter"), "Starting a caption shows how to finish it and how to break a line");
