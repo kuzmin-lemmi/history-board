@@ -1,0 +1,57 @@
+<Window x:Class="HistoryBoard.LibraryWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Библиотека уроков — Доска истории" Width="1060" Height="760" MinWidth="720" MinHeight="560" Background="#FAF7EF" WindowStartupLocation="CenterOwner" PreviewKeyDown="OnKeyDown">
+  <Grid Margin="32,24">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <DockPanel Margin="0,0,0,24">
+      <Image DockPanel.Dock="Left" Source="Assets/brand.png" Width="40" Height="40" Margin="0,0,16,0"/>
+      <StackPanel>
+        <TextBlock Text="Библиотека уроков" FontFamily="Georgia" FontSize="28" Foreground="#26352F"/>
+        <TextBlock Text="Ваши карты, заметки и маршруты урока — под рукой" FontSize="14" Foreground="#56665B" Margin="0,8,0,0"/>
+      </StackPanel>
+    </DockPanel>
+    <Grid Grid.Row="1" Margin="0,0,0,16">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <StackPanel Margin="0,0,16,0">
+        <TextBlock Text="Поиск по названию или файлу" FontSize="13" Margin="0,0,0,6"/>
+        <TextBox x:Name="SearchBox" FontSize="16" Height="40" Padding="10,6" BorderBrush="#D1D6C9" Background="#FFFDF8" TextChanged="OnSearchChanged" AutomationProperties.Name="Поиск уроков"/>
+      </StackPanel>
+      <Button Grid.Column="1" Content="Открыть файл…" Click="OnOpenFile" VerticalAlignment="Bottom" MinHeight="44" Margin="0,0,8,0" Background="#E8EDDF"/>
+      <Button Grid.Column="2" Content="Новый урок" Click="OnNewLesson" VerticalAlignment="Bottom" MinHeight="44" Background="#58725B" Foreground="White"/>
+    </Grid>
+    <TextBlock x:Name="Summary" Grid.Row="2" FontSize="13" Foreground="#56665B" Margin="0,0,0,12" TextWrapping="Wrap"/>
+    <Grid Grid.Row="3">
+      <ListBox x:Name="LessonsList" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" SelectionChanged="OnSelectionChanged" MouseDoubleClick="OnOpenSelected" AutomationProperties.Name="Недавние уроки">
+        <ListBox.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ListBox.ItemsPanel>
+        <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0,0,12,16"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/></Style></ListBox.ItemContainerStyle>
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <Border Width="288" Background="#FFFDF8" BorderBrush="#D8DDCF" BorderThickness="1" CornerRadius="8" ToolTip="{Binding Path}">
+              <StackPanel>
+                <Grid Height="130" Background="#EAEADF" Margin="8,8,8,0">
+                  <TextBlock Text="Доска истории" VerticalAlignment="Center" HorizontalAlignment="Center" FontFamily="Georgia" FontSize="19" Foreground="#56665B"/>
+                  <Image Source="{Binding Preview}" Stretch="Uniform"/>
+                </Grid>
+                <StackPanel Margin="12">
+                  <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                  <TextBlock Text="{Binding FileLabel}" FontSize="12" Foreground="#56665B" TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
+                  <TextBlock Text="{Binding Availability}" FontSize="12" Foreground="#56665B" TextWrapping="Wrap" Margin="0,8,0,4"/>
+                  <TextBlock Text="{Binding OpenedLabel}" FontSize="12" Foreground="#56665B"/>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+      <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="440" IsHitTestVisible="False">
+        <TextBlock x:Name="EmptyTitle" Text="Здесь появятся ваши уроки" FontFamily="Georgia" FontSize="23" HorizontalAlignment="Center" TextAlignment="Center"/>
+        <TextBlock x:Name="EmptyDescription" Text="Откройте .hboard или сохраните новый урок. Он появится в библиотеке вместе с миниатюрой." FontSize="15" Foreground="#56665B" TextWrapping="Wrap" TextAlignment="Center" Margin="0,16,0,0"/>
+      </StackPanel>
+    </Grid>
+    <Grid Grid.Row="4" Margin="0,16,0,0">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <Button x:Name="ForgetButton" Content="Убрать из списка" HorizontalAlignment="Left" IsEnabled="False" Click="OnForget" MinHeight="44" ToolTip="Файл урока останется на компьютере"/>
+      <Button Grid.Column="1" Content="Вернуться на доску" Click="OnReturn" MinHeight="44" Margin="8,0"/>
+      <Button x:Name="OpenButton" Grid.Column="2" Content="Открыть урок" Click="OnOpenSelected" IsEnabled="False" MinHeight="44" Background="#58725B" Foreground="White"/>
+    </Grid>
+  </Grid>
+</Window>

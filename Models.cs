@@ -25,9 +25,10 @@ public sealed class BoardItem
     public bool Serif { get; set; }
     public bool Numbered { get; set; }
     public bool Locked { get; set; }
+    public string? GroupId { get; set; }
     public string? AssetId { get; set; }
     public List<BoardPoint> Points { get; set; } = [];
-    public BoardItem Clone() => new() { Id = Id, Kind = Kind, X = X, Y = Y, Width = Width, Height = Height, Text = Text, Color = Color, Size = Size, Bold = Bold, Serif = Serif, Numbered = Numbered, Locked = Locked, AssetId = AssetId, Points = Points.ToList() };
+    public BoardItem Clone() => new() { Id = Id, Kind = Kind, X = X, Y = Y, Width = Width, Height = Height, Text = Text, Color = Color, Size = Size, Bold = Bold, Serif = Serif, Numbered = Numbered, Locked = Locked, GroupId = GroupId, AssetId = AssetId, Points = Points.ToList() };
 }
 
 public record struct BoardPoint(double X, double Y) { public Point ToPoint() => new(X, Y); }
@@ -56,12 +57,13 @@ public sealed class Lesson
 {
     public int Version { get; set; } = 2;
     public string Title { get; set; } = "Новый урок";
+    public string Paper { get; set; } = "grid";
     public double Width { get; set; } = 1600;
     public double Height { get; set; } = 1000;
     public List<BoardItem> Items { get; set; } = [];
     public List<LessonFrame> Frames { get; set; } = [];
     public BoardView? View { get; set; } = new();
-    public Lesson Clone() => new() { Version = Version, Title = Title, Width = Width, Height = Height, Items = Items.Select(i => i.Clone()).ToList(), Frames = Frames.Select(f => f.Clone()).ToList(), View = View?.Clone() };
+    public Lesson Clone() => new() { Version = Version, Title = Title, Paper = Paper, Width = Width, Height = Height, Items = Items.Select(i => i.Clone()).ToList(), Frames = Frames.Select(f => f.Clone()).ToList(), View = View?.Clone() };
 }
 
 public static class LessonFile
@@ -123,6 +125,7 @@ public static class LessonFile
     {
         if (lesson.Version is not (1 or 2)) throw new InvalidDataException("Эта версия урока не поддерживается.");
         if (lesson.Title == null || lesson.Title.Length > 1000) throw new InvalidDataException("Некорректное название урока.");
+        if (lesson.Paper is not ("grid" or "dots" or "ruled" or "plain" or "white")) throw new InvalidDataException("Некорректный фон доски.");
         if (lesson.View is { } view && (!Coordinate(view.X) || !Coordinate(view.Y) || !double.IsFinite(view.Zoom) || view.Zoom < .02 || view.Zoom > 8))
             throw new InvalidDataException("Некорректный масштаб доски.");
         if (lesson.Frames == null || lesson.Frames.Count > 500) throw new InvalidDataException("Слишком много кадров.");
@@ -139,6 +142,7 @@ public static class LessonFile
             if (i == null || string.IsNullOrEmpty(i.Id) || !ids.Add(i.Id) || i.Kind is not ("text" or "image" or "pen" or "arrow") || i.Text == null || i.Text.Length > 100000 || i.Points == null || i.Points.Count > 100000 ||
                 !Coordinate(i.X) || !Coordinate(i.Y) || new[] { i.Width, i.Height, i.Size }.Any(n => !double.IsFinite(n) || Math.Abs(n) > 100000) || i.Size < 1 || i.Size > 300 || i.Width <= 0 || i.Height <= 0 ||
                 i.Points.Any(p => !Coordinate(p.X) || !Coordinate(p.Y)) ||
+                i.GroupId is { } groupId && (groupId.Length != 32 || groupId.Any(c => !Uri.IsHexDigit(c))) ||
                 i.AssetId is { } assetId && (assetId.Length != 32 || assetId.Any(c => !Uri.IsHexDigit(c))))
                 throw new InvalidDataException("Урок содержит некорректный объект.");
             try { ColorConverter.ConvertFromString(i.Color); } catch { throw new InvalidDataException("Некорректный цвет."); }

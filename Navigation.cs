@@ -11,7 +11,7 @@ public partial class MainWindow
 {
     private double cameraX, cameraY;
     private int viewRevision, autosavedViewRevision = -1;
-    private bool panning, spaceHeld, presenting, presentationEnteredFullscreen;
+    private bool panning, spaceHeld, presenting, presentationWasFullscreen;
     private Point panStart;
     private double panStartX, panStartY;
     private int activeFrame = -1;
@@ -121,9 +121,10 @@ public partial class MainWindow
 
     private void ToggleLock()
     {
-        CommitEditor(); FinishGesture(); var item = Surface.Selected; if (item == null) return;
-        var before = lesson.Clone(); item.Locked = !item.Locked; Surface.Refresh(item); Changed(before);
-        Status.Text = item.Locked ? "● Объект закреплён на доске" : "● Объект можно перемещать и редактировать";
+        CommitEditor(); FinishGesture(); var items = Surface.SelectedItems.ToArray(); if (items.Length == 0) return;
+        var locked = !Surface.SelectionLocked;
+        var before = lesson.Clone(); foreach (var item in items) item.Locked = locked; Surface.RefreshMany(items); Changed(before);
+        Status.Text = locked ? "● Выделение закреплено на доске" : "● Выделение можно перемещать и редактировать";
     }
     private void OnLock(object sender, RoutedEventArgs e) => ToggleLock();
 
@@ -222,10 +223,10 @@ public partial class MainWindow
         if (presenting) return;
         CommitEditor(); FinishGesture(); EndPan(); StopCameraAnimation();
         if (lesson.Frames.Count == 0) AddFrame();
-        presenting = true; presentationEnteredFullscreen = !fullscreen;
+        presenting = true; presentationWasFullscreen = fullscreen;
         MainHeader.Visibility = PropertyBar.Visibility = ToolRail.Visibility = FramesTray.Visibility = StatusBar.Visibility = ZoomControls.Visibility = Visibility.Collapsed;
         ToolColumn.Width = new GridLength(0); PresentationControls.Visibility = Visibility.Visible;
-        if (presentationEnteredFullscreen) ToggleFullscreen();
+        if (!fullscreen) ToggleFullscreen();
         UpdateLayout(); GoToFrame(activeFrame >= 0 ? activeFrame : 0, false);
     }
     private void EndPresentation()
@@ -234,7 +235,7 @@ public partial class MainWindow
         StopCameraAnimation(); presenting = false;
         MainHeader.Visibility = PropertyBar.Visibility = ToolRail.Visibility = FramesTray.Visibility = StatusBar.Visibility = ZoomControls.Visibility = Visibility.Visible;
         ToolColumn.Width = new GridLength(48); PresentationControls.Visibility = Visibility.Collapsed;
-        if (presentationEnteredFullscreen) ToggleFullscreen();
+        if (fullscreen != presentationWasFullscreen) ToggleFullscreen();
         UpdateLayout(); GoToFrame(activeFrame >= 0 ? activeFrame : 0, false); UpdateUi();
     }
     private void OnPresent(object sender, RoutedEventArgs e) => StartPresentation();

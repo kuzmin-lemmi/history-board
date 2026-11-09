@@ -18,12 +18,16 @@ public sealed class BoardSurface : FrameworkElement
     private readonly DrawingVisual selection = new();
     private readonly DrawingVisual preview = new();
     public Lesson Lesson { get; private set; } = new();
-    public BoardItem? Selected { get; private set; }
+    private readonly List<BoardItem> selectedItems = [];
+    public IReadOnlyList<BoardItem> SelectedItems => selectedItems;
+    public BoardItem? Selected => selectedItems.FirstOrDefault();
+    public bool SelectionLocked => selectedItems.Any(i => i.Locked);
+    private Rect marquee = Rect.Empty;
     public Transform CameraTransform => camera;
     public Point ScreenToWorld(Point point) => camera.Inverse.Transform(point);
     public Point WorldToScreen(Point point) => camera.Transform(point);
-    public void SetCamera(double x, double y, double zoom) => camera.Matrix = new Matrix(zoom, 0, 0, zoom, -x * zoom, -y * zoom);
-    public Rect SelectedBounds => Selected is null ? Rect.Empty : Bounds(Selected);
+    public void SetCamera(double x, double y, double zoom) { camera.Matrix = new Matrix(zoom, 0, 0, zoom, -x * zoom, -y * zoom); DrawSelection(); InvalidateVisual(); }
+    public Rect SelectedBounds { get { var bounds = Rect.Empty; foreach (var item in selectedItems) bounds.Union(Bounds(item)); return bounds; } }
     protected override int VisualChildrenCount => visuals.Count;
     protected override Visual GetVisualChild(int index) => visuals[index];
 
@@ -56,7 +60,7 @@ public sealed class BoardSurface : FrameworkElement
             objects[item.Id] = visual; world.Children.Add(visual); DrawItem(visual, item);
         }
         world.Children.Add(preview); world.Children.Add(selection);
-        Selected = null;
+        selectedItems.Clear(); marquee = Rect.Empty;
         using (preview.RenderOpen()) { }
         DrawSelection();
         InvalidateVisual();
@@ -73,18 +77,49 @@ public sealed class BoardSurface : FrameworkElement
     public void Refresh(BoardItem item)
     {
         if (objects.TryGetValue(item.Id, out var visual)) DrawItem(visual, item);
-        if (Selected == item) DrawSelection();
+        if (selectedItems.Contains(item)) DrawSelection();
+    }
+
+    public void RefreshMany(IEnumerable<BoardItem> items)
+    {
+        foreach (var item in items)
+            if (objects.TryGetValue(item.Id, out var visual)) DrawItem(visual, item);
+        DrawSelection();
     }
 
     public void Remove(BoardItem item)
     {
         Lesson.Items.Remove(item);
         if (objects.Remove(item.Id, out var visual)) world.Children.Remove(visual);
-        if (Selected == item) Select(null);
+        selectedItems.Remove(item); DrawSelection();
         InvalidateVisual();
     }
 
-    public void Select(BoardItem? item) { Selected = item; DrawSelection(); }
+    public void RemoveMany(IEnumerable<BoardItem> items)
+    {
+        var removed = items.ToHashSet();
+        Lesson.Items.RemoveAll(removed.Contains);
+        foreach (var item in removed)
+            if (objects.Remove(item.Id, out var visual)) world.Children.Remove(visual);
+        selectedItems.RemoveAll(removed.Contains); DrawSelection(); InvalidateVisual();
+    }
+
+    public void Select(BoardItem? item) => SelectMany(item == null ? [] : [item]);
+    public IEnumerable<BoardItem> GroupMembers(BoardItem item) => item.GroupId == null ? [item] : Lesson.Items.Where(i => i.GroupId == item.GroupId);
+    public void SelectMany(IEnumerable<BoardItem> items)
+    {
+        var candidates = items.ToHashSet();
+        var groups = candidates.Where(i => i.GroupId != null).Select(i => i.GroupId!).ToHashSet();
+        selectedItems.Clear();
+        selectedItems.AddRange(Lesson.Items.Where(i => candidates.Contains(i) || i.GroupId != null && groups.Contains(i.GroupId)));
+        DrawSelection();
+    }
+    public void ToggleSelection(BoardItem item)
+    {
+        var group = GroupMembers(item).ToArray();
+        SelectMany(group.Any(selectedItems.Contains) ? selectedItems.Except(group).ToArray() : selectedItems.Concat(group).ToArray());
+    }
+    public void ShowMarquee(Rect rect) { marquee = rect; DrawSelection(); }
     public void Preview(BoardItem? item) { if (item == null) { using (preview.RenderOpen()) { } } else DrawItem(preview, item); }
     public void HideItem(BoardItem item, bool hide) { if (objects.TryGetValue(item.Id, out var v)) v.Opacity = hide ? 0 : 1; }
 
@@ -184,17 +219,45 @@ public sealed class BoardSurface : FrameworkElement
     private void DrawSelection()
     {
         using var dc = selection.RenderOpen();
+        var scale = Math.Max(.02, camera.Matrix.M11);
+        if (!marquee.IsEmpty) dc.DrawRectangle(Brush("#1458725B"), new Pen(Brush("#58725B"), 1 / scale), marquee);
         if (Selected == null) return;
-        var rect = Bounds(Selected); rect.Inflate(7, 7);
-        var pen = new Pen(Brush(Selected.Locked ? "#9A8063" : "#58725B"), 1.5) { DashStyle = Selected.Locked ? DashStyles.Solid : DashStyles.Dash };
+        var rect = SelectedBounds; rect.Inflate(7 / scale, 7 / scale);
+        var pen = new Pen(Brush(SelectionLocked ? "#9A8063" : "#58725B"), 1.5 / scale) { DashStyle = SelectionLocked ? DashStyles.Solid : DashStyles.Dash };
         dc.DrawRectangle(null, pen, rect);
-        if (Selected.Kind == "image" && !Selected.Locked)
-            dc.DrawRoundedRectangle(Brushes.White, new Pen(Brush("#58725B"), 2), new Rect(rect.Right - 7, rect.Bottom - 7, 14, 14), 3, 3);
+        if (selectedItems.Count == 1 && Selected.Kind == "image" && !SelectionLocked)
+            dc.DrawRoundedRectangle(Brushes.White, new Pen(Brush("#58725B"), 2 / scale), new Rect(rect.Right - 7 / scale, rect.Bottom - 7 / scale, 14 / scale, 14 / scale), 3 / scale, 3 / scale);
     }
 
     protected override void OnRender(DrawingContext dc)
     {
-        dc.DrawRectangle(Brushes.White, null, new Rect(RenderSize));
+        dc.PushTransform(camera);
+        var area = new Rect(ScreenToWorld(new Point()), ScreenToWorld(new Point(ActualWidth, ActualHeight)));
+        DrawPaper(dc, area, Math.Max(.02, camera.Matrix.M11));
+        dc.Pop();
+    }
+
+    private void DrawPaper(DrawingContext dc, Rect area, double scale)
+    {
+        dc.DrawRectangle(Brush(Lesson.Paper == "white" ? "#FFFFFF" : "#FAF7EF"), null, area);
+        if (Lesson.Paper is "plain" or "white") return;
+        var spacing = 24.0;
+        while (spacing * scale < 12) spacing *= 5;
+        var tile = new DrawingVisual();
+        using (var pattern = tile.RenderOpen())
+        {
+            pattern.DrawRectangle(Brushes.Transparent, null, new Rect(0, 0, spacing, spacing));
+            var ink = Brush("#DEDCCF");
+            var pen = new Pen(ink, .8 / scale);
+            if (Lesson.Paper == "dots") pattern.DrawEllipse(Brush("#C2C8B8"), null, new Point(spacing / 2, spacing / 2), 1.1 / scale, 1.1 / scale);
+            else
+            {
+                pattern.DrawLine(pen, new Point(0, 0), new Point(spacing, 0));
+                if (Lesson.Paper == "grid") pattern.DrawLine(pen, new Point(0, 0), new Point(0, spacing));
+            }
+        }
+        var brush = new DrawingBrush(tile.Drawing) { TileMode = TileMode.Tile, ViewportUnits = BrushMappingMode.Absolute, ViewboxUnits = BrushMappingMode.Absolute, Viewport = new Rect(0, 0, spacing, spacing), Viewbox = new Rect(0, 0, spacing, spacing) };
+        brush.Freeze(); dc.DrawRectangle(brush, null, area);
     }
 
     public Rect ContentBounds()
@@ -204,20 +267,24 @@ public sealed class BoardSurface : FrameworkElement
         return bounds;
     }
 
-    public void ExportPng(string path, Rect? region = null)
+    public void ExportPng(string path, Rect? region = null, int maxSide = 8192)
+        => File.WriteAllBytes(path, RenderPng(region, maxSide));
+
+    public byte[] RenderPng(Rect? region = null, int maxSide = 8192)
     {
         var area = region ?? ContentBounds();
         if (area.IsEmpty) area = new Rect(0, 0, Lesson.Width, Lesson.Height);
         else if (region == null) area.Inflate(32, 32);
-        var scale = Math.Min(1, Math.Min(8192 / area.Width, 8192 / area.Height));
+        var scale = Math.Min(1, Math.Min(maxSide / area.Width, maxSide / area.Height));
         scale = Math.Min(scale, Math.Sqrt(32_000_000 / (area.Width * area.Height)));
         var width = Math.Max(1, (int)Math.Ceiling(area.Width * scale));
         var height = Math.Max(1, (int)Math.Ceiling(area.Height * scale));
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, width, height));
+            dc.DrawRectangle(Brush(Lesson.Paper == "white" ? "#FFFFFF" : "#FAF7EF"), null, new Rect(0, 0, width, height));
             dc.PushTransform(new MatrixTransform(scale, 0, 0, scale, -area.X * scale, -area.Y * scale));
+            DrawPaper(dc, area, scale);
             foreach (var item in Lesson.Items)
             {
                 var obj = new DrawingVisual(); DrawItem(obj, item);
@@ -227,7 +294,7 @@ public sealed class BoardSurface : FrameworkElement
         }
         var target = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32); target.Render(visual);
         var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(target));
-        using var file = File.Create(path); encoder.Save(file);
+        using var memory = new MemoryStream(); encoder.Save(memory); return memory.ToArray();
     }
 
     public static SolidColorBrush Brush(string color) { var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)); brush.Freeze(); return brush; }

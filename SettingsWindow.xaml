@@ -1,0 +1,45 @@
+<Window x:Class="HistoryBoard.SettingsWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Настройки — Доска истории" Width="900" Height="760" MinWidth="700" MinHeight="540" Focusable="True" WindowStartupLocation="CenterOwner" Background="#FAF7EF" PreviewKeyDown="OnKeyDown">
+  <Grid Margin="28,24">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <StackPanel Margin="0,0,0,20">
+      <TextBlock Text="Настройки" FontFamily="Georgia" FontSize="28"/>
+      <TextBlock Text="Горячие клавиши" FontSize="18" FontWeight="SemiBold" Margin="0,12,0,8"/>
+      <TextBlock Text="Нажмите на сочетание и введите новое. Оно заменит прежние варианты этой команды." Foreground="#56665B" FontSize="14" TextWrapping="Wrap"/>
+    </StackPanel>
+    <StackPanel Grid.Row="1" Margin="0,0,0,16">
+      <TextBlock Text="Найти команду" FontSize="13" Margin="0,0,0,6"/>
+      <TextBox x:Name="SearchBox" Height="38" Padding="10,6" FontSize="15" TextChanged="OnSearch" BorderBrush="#D1D6C9" AutomationProperties.Name="Найти команду для изменения клавиш"/>
+    </StackPanel>
+    <TextBlock Grid.Row="2" Text="Ввод текста и Esc работают как обычно. Пробел + мышь перемещают доску." FontSize="13" Foreground="#56665B" Margin="0,0,0,12" TextWrapping="Wrap"/>
+    <Grid Grid.Row="3">
+      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <ItemsControl x:Name="CommandsList">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Background="#FFFDF8" BorderBrush="#E0E2D6" BorderThickness="0,0,0,1" Padding="12,8">
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="240"/><ColumnDefinition Width="72"/></Grid.ColumnDefinitions>
+                  <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Name}" FontSize="14" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding Category}" FontSize="12" Foreground="#56665B" Margin="0,4,0,0"/>
+                  </StackPanel>
+                  <Button Grid.Column="1" Content="{Binding Keys}" Tag="{Binding Command}" Click="OnCapture" MinHeight="42" Padding="8" Background="{Binding Background}" BorderThickness="1" BorderBrush="#D1D6C9" AutomationProperties.Name="{Binding Name}" ToolTip="Нажмите и введите новое сочетание; Esc отменяет назначение"/>
+                  <Button Grid.Column="2" Content="Убрать" Tag="{Binding Command}" Click="OnClear" FontSize="12" MinHeight="42" Padding="8" ToolTip="Отключить горячую клавишу этой команды"/>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+      <TextBlock x:Name="EmptyMessage" Text="Команда не найдена. Попробуйте другое название." Visibility="Collapsed" FontSize="15" Foreground="#56665B" TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    </Grid>
+    <TextBlock x:Name="Status" Grid.Row="4" Text="Изменения применятся после сохранения." Foreground="#56665B" TextWrapping="Wrap" MinHeight="44" FontSize="13" Margin="0,12,0,8"/>
+    <Grid Grid.Row="5">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <Button Content="Сбросить все" Click="OnReset" HorizontalAlignment="Left" MinHeight="44" Padding="12,8"/>
+      <Button Grid.Column="1" Content="Отмена" Click="OnCancel" MinHeight="44" Margin="0,0,8,0"/>
+      <Button Grid.Column="2" Content="Сохранить" Click="OnSave" MinHeight="44" Background="#58725B" Foreground="White"/>
+    </Grid>
+  </Grid>
+</Window>

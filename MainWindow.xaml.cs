@@ -34,12 +34,14 @@ public partial class MainWindow : Window
     public MainWindow(bool restore = true)
     {
         InitializeComponent();
+        shortcuts = ShortcutProfile.Load(SettingsPath);
         BuildTools(); BuildPalette();
+        ApplyShortcutHints();
         Surface.SetLesson(lesson, assets);
         EditLayer.RenderTransform = Surface.CameraTransform;
         ready = true;
         SetTool(BoardTool.Text); UpdateUi();
-        Loaded += (_, _) => { RestoreCamera(); if (restore) RestoreAutosave(); };
+        Loaded += (_, _) => { RestoreCamera(); if (restore) { RestoreAutosave(); Dispatcher.BeginInvoke(new Action(() => OnLibrary(this, new RoutedEventArgs()))); } };
         autosaveTimer.Tick += async (_, _) => await AutosaveAsync();
     }
 
@@ -116,13 +118,18 @@ public partial class MainWindow : Window
         if (!ready) return;
         EmptyHint.Visibility = lesson.Items.Count == 0 && editing == null && draft == null ? Visibility.Visible : Visibility.Collapsed;
         UndoButton.IsEnabled = undo.Count > 0; RedoButton.IsEnabled = redo.Count > 0;
-        var selected = Surface.Selected;
-        SelectedLabel.Text = selected == null ? "" : selected.Locked ? "Объект закреплён" : selected.Kind switch { "image" => "Карта", "text" => "Надпись", _ => "Пометка" };
-        LockButton.IsEnabled = selected != null;
-        LockButton.Content = selected?.Locked == true ? "Открепить" : "Закрепить";
-        BackButton.Visibility = selected?.Kind == "image" && !selected.Locked ? Visibility.Visible : Visibility.Collapsed;
+        UpdateSelectionUi();
         RebuildFrames();
         Title = $"{lesson.Title}{(revision != savedRevision ? " •" : "")} — Доска истории";
+    }
+
+    private void UpdateSelectionUi()
+    {
+        var selected = Surface.Selected;
+        SelectedLabel.Text = Surface.SelectedItems.Count > 1 ? $"Выбрано: {Surface.SelectedItems.Count}" : selected == null ? "" : selected.Locked ? "Объект закреплён" : selected.Kind switch { "image" => "Карта", "text" => "Надпись", _ => "Пометка" };
+        LockButton.IsEnabled = selected != null;
+        LockButton.Content = Surface.SelectionLocked ? "Открепить" : "Закрепить";
+        BackButton.Visibility = Surface.SelectedItems.Count == 1 && selected?.Kind == "image" && !Surface.SelectionLocked ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void Changed(Lesson before)
@@ -135,9 +142,11 @@ public partial class MainWindow : Window
 
     private void ChangeSelected(Action<BoardItem> change)
     {
-        var item = editing ?? Surface.Selected;
-        if (item == null || item.Kind == "image" || item.Locked) return;
-        var before = lesson.Clone(); change(item); Surface.Refresh(item);
+        var items = editing != null ? new[] { editing } : Surface.SelectedItems.ToArray();
+        if (items.Length == 0 || items.Any(i => i.Locked)) return;
+        var targets = items.Where(i => i.Kind != "image").ToArray();
+        if (targets.Length == 0) return;
+        var before = lesson.Clone(); foreach (var item in targets) change(item); Surface.RefreshMany(targets);
         if (editing != null) StyleEditor(); else Changed(before);
     }
 
@@ -163,14 +172,21 @@ public partial class MainWindow : Window
             // The resize handle extends slightly beyond the image itself.
             var selected = Surface.Selected;
             var rect = Surface.SelectedBounds;
-            resizing = selected?.Kind == "image" && !rect.IsEmpty && (point - new Point(rect.Right + 7, rect.Bottom + 7)).Length < 20 / zoom;
+            resizing = Surface.SelectedItems.Count == 1 && selected?.Kind == "image" && !rect.IsEmpty && (point - new Point(rect.Right + 7 / zoom, rect.Bottom + 7 / zoom)).Length < 14 / zoom;
             if (resizing) hit = selected;
-            Surface.Select(hit);
-            if (hit == null) { UpdateUi(); return; }
-            if (hit.Locked) { CopyProperties(hit); UpdateUi(); Status.Text = "Объект закреплён. Нажмите «Открепить», чтобы изменить его."; return; }
+            if (hit == null)
+            {
+                marqueeStartSelection = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? Surface.SelectedItems.ToArray() : [];
+                Surface.SelectMany(marqueeStartSelection); selectingArea = true;
+                gestureStart = point; gesture = true; Surface.CaptureMouse(); UpdateUi(); e.Handled = true; return;
+            }
+            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) && !resizing) { Surface.ToggleSelection(hit); UpdateUi(); e.Handled = true; return; }
+            if (!Surface.SelectedItems.Contains(hit)) Surface.Select(hit);
+            if (Surface.SelectionLocked) { CopyProperties(hit); UpdateUi(); Status.Text = "Выделение содержит закреплённые объекты. Сначала открепите их."; return; }
             if (hit.Kind == "text" && e.ClickCount == 2) { BeginEditor(hit, point); return; }
             CopyProperties(hit);
             moving = hit; moveOriginal = hit.Clone();
+            moveOriginals = Surface.SelectedItems.ToDictionary(i => i.Id, i => i.Clone());
         }
         else if (tool is BoardTool.Pen or BoardTool.Arrow)
         {
@@ -190,6 +206,11 @@ public partial class MainWindow : Window
         var point = BoardPosition(e);
         PositionLabel.Text = $"{point.X:0}, {point.Y:0}";
         if (!gesture) return;
+        if (selectingArea)
+        {
+            var area = new Rect(gestureStart, point);
+            SelectArea(area); return;
+        }
         if (draft != null)
         {
             if (draft.Kind == "arrow")
@@ -216,8 +237,7 @@ public partial class MainWindow : Window
             }
             else
             {
-                moving.X = moveOriginal.X + delta.X;
-                moving.Y = moveOriginal.Y + delta.Y;
+                MoveSelection(delta);
             }
             Surface.Refresh(moving);
         }
@@ -231,6 +251,11 @@ public partial class MainWindow : Window
     {
         if (!gesture) return;
         gesture = false; var changed = false;
+        if (selectingArea)
+        {
+            selectingArea = false; Surface.ShowMarquee(Rect.Empty); marqueeStartSelection = [];
+            Surface.ReleaseMouseCapture(); UpdateUi(); return;
+        }
         if (draft != null)
         {
             if (draft.Kind == "pen" || draft.Points.Count > 1 && (draft.Points[^1].ToPoint() - draft.Points[0].ToPoint()).Length > 4)
@@ -240,17 +265,23 @@ public partial class MainWindow : Window
         else if (moving != null && moveOriginal != null)
             changed = moving.X != moveOriginal.X || moving.Y != moveOriginal.Y || moving.Width != moveOriginal.Width;
         else if (tool == BoardTool.Eraser) changed = gestureBefore?.Items.Count != lesson.Items.Count;
-        moving = null; moveOriginal = null;
+        moving = null; moveOriginal = null; moveOriginals.Clear();
         Surface.ReleaseMouseCapture();
         if (changed && gestureBefore != null) Changed(gestureBefore);
         gestureBefore = null; UpdateUi();
     }
 
-    private void EraseAt(Point point) { var item = Surface.Hit(point, false); if (item != null && !item.Locked) Surface.Remove(item); }
+    private void EraseAt(Point point)
+    {
+        var item = Surface.Hit(point, false); if (item == null) return;
+        var group = Surface.GroupMembers(item).ToArray();
+        if (group.Any(i => i.Locked || i.Kind == "image")) return;
+        Surface.RemoveMany(group);
+    }
 
     private void BeginEditor(BoardItem? item, Point point)
     {
-        if (item?.Locked == true) { Surface.Select(item); UpdateUi(); Status.Text = "Эта надпись закреплена. Сначала нажмите «Открепить»."; return; }
+        if (item != null && Surface.GroupMembers(item).Any(i => i.Locked)) { Surface.Select(item); UpdateUi(); Status.Text = "Эта надпись закреплена. Сначала нажмите «Открепить»."; return; }
         editBefore = lesson.Clone();
         editing = item ?? new BoardItem { Kind = "text", X = point.X, Y = point.Y, Width = Math.Clamp(Viewport.ActualWidth * .8 / zoom, 600, 1200), Size = fontSize, Color = color, Bold = bold, Serif = serif, Numbered = tool == BoardTool.List };
         if (item == null) Surface.Add(editing);
@@ -373,8 +404,8 @@ public partial class MainWindow : Window
     private void OnRedo(object sender, RoutedEventArgs e) => Redo();
     private void DeleteSelected()
     {
-        CommitEditor(); var item = Surface.Selected; if (item == null || item.Locked) return;
-        var before = lesson.Clone(); Surface.Remove(item); Changed(before);
+        CommitEditor(); FinishGesture(); var items = Surface.SelectedItems.ToArray(); if (items.Length == 0 || Surface.SelectionLocked) return;
+        var before = lesson.Clone(); Surface.RemoveMany(items); Changed(before);
     }
     private void OnDelete(object sender, RoutedEventArgs e) => DeleteSelected();
     private void OnSendBack(object sender, RoutedEventArgs e)
@@ -397,17 +428,8 @@ public partial class MainWindow : Window
             var activeLesson = lesson;
             Status.Text = "Загружаем карту…";
             var bytes = await File.ReadAllBytesAsync(path);
-            var image = await Task.Run(() => LessonFile.DecodeImage(bytes));
             if (activeLesson != lesson) { Status.Text = "Урок изменился. Добавьте карту ещё раз."; return; }
-            CommitEditor(); FinishGesture();
-            var before = lesson.Clone(); var id = Guid.NewGuid().ToString("N"); assets[id] = bytes;
-            var visible = VisibleRegion;
-            var factor = Math.Min(visible.Width * .82 / image.PixelWidth, visible.Height * .82 / image.PixelHeight);
-            var item = new BoardItem { Kind = "image", AssetId = id, Width = image.PixelWidth * factor, Height = image.PixelHeight * factor };
-            item.X = visible.X + (visible.Width - item.Width) / 2; item.Y = visible.Y + (visible.Height - item.Height) / 2;
-            Surface.AddImage(id, image); lesson.Items.Insert(0, item); Surface.Rebuild();
-            SetTool(BoardTool.Select); Surface.Select(item); Changed(before);
-            Status.Text = "●  Карта добавлена. Выберите карандаш или стрелку, чтобы рисовать поверх.";
+            await AddImageBytesAsync(bytes);
         }
         catch (Exception ex) { Error("Не удалось открыть карту", ex); }
     }
@@ -472,12 +494,14 @@ public partial class MainWindow : Window
             if (dialog.ShowDialog(this) != true) return false;
             path = dialog.FileName;
         }
-        var snapshot = lesson.Clone(); var data = UsedAssets(snapshot); var value = revision;
+        var activeLesson = lesson; var snapshot = lesson.Clone(); var data = UsedAssets(snapshot); var value = revision;
+        var preview = CaptureLessonPreview();
         try
         {
             await saveGate.WaitAsync();
             try { await Task.Run(() => LessonFile.Save(path, snapshot, data)); } finally { saveGate.Release(); }
-            currentPath = path; savedRevision = value; UpdateUi(); Status.Text = "●  Урок сохранён: " + Path.GetFileName(path); return true;
+            if (ReferenceEquals(activeLesson, lesson)) { currentPath = path; savedRevision = value; }
+            UpdateUi(); Status.Text = "●  Урок сохранён: " + Path.GetFileName(path); RememberLesson(path, snapshot, preview); return true;
         }
         catch (Exception ex) { Error("Не удалось сохранить урок", ex); return false; }
     }
@@ -509,7 +533,7 @@ public partial class MainWindow : Window
             var result = await Task.Run(() => LessonFile.Load(path));
             StopCameraAnimation(); lesson = result.Lesson; assets = result.Assets; currentPath = path; undo.Clear(); redo.Clear(); activeFrame = -1;
             revision++; savedRevision = revision; Surface.SetLesson(lesson, assets); LessonTitle.Text = lesson.Title;
-            UpdateUi(); RestoreCamera(); ScheduleAutosave(); Status.Text = "●  Урок открыт: " + Path.GetFileName(path);
+            UpdateUi(); RestoreCamera(); ScheduleAutosave(); Status.Text = "●  Урок открыт: " + Path.GetFileName(path); RememberLesson(path, lesson, CaptureLessonPreview());
         }
         catch (Exception ex) { Error("Не удалось открыть урок", ex); }
     }
@@ -532,9 +556,7 @@ public partial class MainWindow : Window
 
     private static string SafeName(string value) => string.Concat(value.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
     private void Error(string title, Exception ex) { Status.Text = title; MessageBox.Show(this, ex.Message, title, MessageBoxButton.OK, MessageBoxImage.Warning); }
-    private void OnHelp(object sender, RoutedEventArgs e) => MessageBox.Show(this,
-        "БЕСКОНЕЧНАЯ ДОСКА\nПишите и размещайте карты в любом месте. Пробел + левая кнопка мыши, средняя кнопка или инструмент «Рука» (H) перемещают поле. Колёсико в режиме выбора двигает вид вверх/вниз; Shift + колёсико — влево/вправо. Ctrl + колёсико масштабирует вокруг курсора. Ctrl+0 показывает все объекты.\n\nТЕКСТ И РИСОВАНИЕ\nКликните инструментом «Текст» или «Список» и пишите. Колёсико меняет размер шрифта, Enter — новая строка, Esc — закончить ввод. Карты можно перетащить в окно. Карандаш и стрелка рисуют поверх карты; Shift выравнивает стрелку.\n\nЗАКРЕПЛЕНИЕ\nИнструмент «Выбор» (V) перемещает объекты. Двойной клик редактирует надпись, уголок карты меняет её размер. Кнопка «Закрепить» (Ctrl+L) защищает объект от случайного перемещения, редактирования и удаления.\n\nКАДРЫ И ПОКАЗ\nНайдите нужный вид и нажмите «＋ Кадр» (Ctrl+Enter). Повторите для других участков. Клик по кадру возвращает его вид; двойной клик меняет название. Правая кнопка — порядок, обновление вида и удаление кадра. F5 запускает показ, стрелки или Page Up/Down переключают кадры, Esc завершает показ.\n\nСОХРАНЕНИЕ\nCtrl+S сохраняет урок с картами и кадрами в .hboard, Ctrl+Shift+S — копию. Последний урок и положение камеры восстанавливаются автоматически. Меню PNG экспортирует текущий вид, выбранный кадр или все объекты. F11 — весь экран. Ctrl+Z / Ctrl+Y — отменить / повторить.",
-        "Как пользоваться доской", MessageBoxButton.OK, MessageBoxImage.Information);
+    private void OnHelp(object sender, RoutedEventArgs e) => ShowShortcutHelp();
 
     private WindowState previousState;
     private void ToggleFullscreen()
@@ -546,39 +568,20 @@ public partial class MainWindow : Window
     private void OnFullscreen(object sender, RoutedEventArgs e) => ToggleFullscreen();
     private async void OnKeyDown(object sender, KeyEventArgs e)
     {
-        var ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
-        if (presenting)
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        var textInput = Keyboard.FocusedElement is TextBox;
+        if (key == Key.Escape)
         {
-            e.Handled = true;
-            if (e.Key is Key.Escape or Key.F5) EndPresentation();
-            else if (e.Key is Key.Right or Key.PageDown or Key.Space) NextFrame(1);
-            else if (e.Key is Key.Left or Key.PageUp or Key.Back) NextFrame(-1);
-            else if (e.Key == Key.Home) GoToFrame(0);
-            else if (e.Key == Key.End) GoToFrame(lesson.Frames.Count - 1);
+            if (presenting) { EndPresentation(); e.Handled = true; }
+            else if (!textInput) { if (fullscreen) ToggleFullscreen(); else { Surface.Select(null); UpdateUi(); } e.Handled = true; }
             return;
         }
-        if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; return; }
-        if (e.Key == Key.F5 && Keyboard.FocusedElement is not TextBox) { StartPresentation(); e.Handled = true; return; }
-        if (e.Key == Key.Escape && editing == null) { if (fullscreen) ToggleFullscreen(); else { CommitEditor(); Surface.Select(null); UpdateUi(); } return; }
-        if (ctrl && e.Key == Key.S) { e.Handled = true; await SaveLessonAsync(Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)); return; }
-        if (Keyboard.FocusedElement is TextBox) return;
-        if (e.Key == Key.Space) { spaceHeld = true; Surface.Cursor = Cursors.Hand; e.Handled = true; return; }
-        if (!ctrl && e.Key is Key.PageDown or Key.PageUp) { NextFrame(e.Key == Key.PageDown ? 1 : -1); e.Handled = true; return; }
-        if (ctrl)
-        {
-            e.Handled = true;
-            switch (e.Key)
-            {
-                case Key.Z: Undo(); break; case Key.Y: Redo(); break; case Key.O: OnOpen(this, e); break;
-                case Key.N: OnNew(this, e); break; case Key.M: OnAddMap(this, e); break; case Key.D0: Fit(); break;
-                case Key.B: OnBold(this, e); break; default: e.Handled = false; break;
-                case Key.L: ToggleLock(); break; case Key.Enter: AddFrame(); break;
-            }
-            return;
-        }
-        var selectedTool = e.Key switch { Key.V => BoardTool.Select, Key.H => BoardTool.Hand, Key.T => BoardTool.Text, Key.L => BoardTool.List, Key.P => BoardTool.Pen, Key.A => BoardTool.Arrow, Key.E => BoardTool.Eraser, _ => (BoardTool?)null };
-        if (selectedTool != null) { SetTool(selectedTool.Value); e.Handled = true; }
-        else if (e.Key == Key.Delete) { DeleteSelected(); e.Handled = true; }
+        if (!presenting && !textInput && key == Key.Space && Keyboard.Modifiers == ModifierKeys.None)
+        { spaceHeld = true; Surface.Cursor = Cursors.Hand; e.Handled = true; return; }
+        var wasPresenting = presenting;
+        var matches = shortcuts.Resolve(key, Keyboard.Modifiers, presenting ? ShortcutContext.Presentation : ShortcutContext.Editor, textInput) != null;
+        e.Handled = matches || wasPresenting;
+        if (matches) await HandleShortcutAsync(key, Keyboard.Modifiers, textInput);
     }
 
     private bool closing;

@@ -161,6 +161,10 @@ public partial class MainWindow
         CaptureWindow(Path.Combine(directory, "05-infinite-board-and-frames.png"));
 
         await UpdateServiceTests.RunAsync(directory, Check);
+        await RunEditingFeatureTests(directory, Check);
+        await RunLibraryFeatureTests(directory, Check);
+        RunPaperFeatureTests(directory, Check);
+        await RunShortcutFeatureTests(directory, Check);
 
         var performance = new Stopwatch(); performance.Start();
         var stressLesson = new Lesson();
