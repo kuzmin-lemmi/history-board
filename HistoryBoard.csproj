@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>HistoryBoard</AssemblyName>
+    <RootNamespace>HistoryBoard</RootNamespace>
+    <Version>1.2.0</Version>
+    <Title>Доска истории</Title>
+    <Product>Доска истории</Product>
+    <Description>Интерактивная доска для учителя истории</Description>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Assets\app.ico"/>
+    <Resource Include="Assets\brand.png"/>
+  </ItemGroup>
+</Project>

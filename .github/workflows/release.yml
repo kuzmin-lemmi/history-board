@@ -1,0 +1,55 @@
+name: Build release installer
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag, for example v1.2.1'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+      - uses: actions/setup-dotnet@v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build the version from the release tag
+        shell: pwsh
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v(?<number>\d+\.\d+\.\d+)$') {
+            throw 'The release tag must have the form v1.2.1.'
+          }
+          ./build.ps1 -Version $Matches.number
+      - name: Test the packaged application
+        shell: pwsh
+        run: ./test-app.ps1
+      - name: Attach installer and checksum to the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload $env:RELEASE_TAG `
+            'Готовое приложение/HistoryBoard-Setup-win-x64.exe' `
+            'Готовое приложение/HistoryBoard-Setup-win-x64.exe.sha256' `
+            README.md --clobber --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to upload release assets.' }
+      - name: Keep test results
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: release-test-results
+          path: test-results/local/
+          retention-days: 7

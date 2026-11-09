@@ -1,0 +1,33 @@
+name: Build and test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-dotnet@v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build standalone Windows application
+        shell: pwsh
+        run: ./build.ps1
+      - name: Verify board, presentation, storage and updater
+        shell: pwsh
+        run: ./test-app.ps1
+      - name: Keep test results
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: windows-test-results
+          path: test-results/local/
+          retention-days: 7

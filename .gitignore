@@ -1,0 +1,9 @@
+bin/
+obj/
+test-results/
+Готовое приложение/
+*.user
+*.suo
+.packages/
+.tools-home/
+.bundle-cache/
