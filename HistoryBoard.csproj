@@ -14,6 +14,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <DebugType>embedded</DebugType>
+    <DefaultItemExcludes>$(DefaultItemExcludes);test-results/**;Готовое приложение/**;.packages/**;.bundle-cache/**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
     <Resource Include="Assets\app.ico"/>
