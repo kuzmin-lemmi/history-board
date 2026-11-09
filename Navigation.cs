@@ -196,12 +196,12 @@ public partial class MainWindow
         for (var i = 0; i < lesson.Frames.Count; i++)
         {
             var frame = lesson.Frames[i]; var index = i;
-            var thumbnail = new Image { Width = 64, Height = 38, Stretch = Stretch.Uniform, Source = frameThumbnails.TryGetValue(frame.Id, out var cached) ? cached.Image : null };
+            var thumbnail = new Image { Width = 54, Height = 30, Stretch = Stretch.Uniform, Source = frameThumbnails.TryGetValue(frame.Id, out var cached) ? cached.Image : null };
             var face = new StackPanel { Orientation = Orientation.Horizontal };
             face.Children.Add(new Border { Child = thumbnail, BorderBrush = BoardSurface.Brush("#DCE3D4"), BorderThickness = new Thickness(1), Background = BoardSurface.Brush("#FAF7EF"), Margin = new Thickness(0, 0, 7, 0) });
             face.Children.Add(new TextBlock { Text = $"{i + 1}  {frame.Name}", VerticalAlignment = VerticalAlignment.Center, MaxWidth = 120, TextTrimming = TextTrimming.CharacterEllipsis });
             frameImages[frame.Id] = thumbnail;
-            var button = new Button { Content = face, FontSize = 11, Padding = new Thickness(4, 3, 10, 3), Margin = new Thickness(0, 0, 6, 0), ToolTip = "Перейти к кадру. Двойной клик — название. Правая кнопка — порядок, обновление, удаление." };
+            var button = new Button { Content = face, FontSize = 11, Padding = new Thickness(3, 2, 10, 2), Margin = new Thickness(0, 0, 6, 0), ToolTip = "Перейти к кадру. Двойной клик — название. Правая кнопка — порядок, обновление, удаление." };
             button.MouseEnter += (_, _) => { Surface.HighlightedFrame = index; Surface.Redraw(); };
             button.MouseLeave += (_, _) => { Surface.HighlightedFrame = -1; Surface.Redraw(); };
             button.Click += (_, _) => GoToFrame(index);

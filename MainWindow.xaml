@@ -76,7 +76,7 @@
         </Border>
       </Grid>
     </Grid>
-    <Border x:Name="FramesTray" Grid.Row="3" Height="54" Background="#F8FAF5" BorderBrush="#E1E7DA" BorderThickness="0,1,0,0">
+    <Border x:Name="FramesTray" Grid.Row="3" Height="48" Background="#F8FAF5" BorderBrush="#E1E7DA" BorderThickness="0,1,0,0">
       <DockPanel Margin="10,0">
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
           <Button x:Name="UpdateFrameButton" Content="↻ Обновить кадр" FontSize="11" Padding="9,4" Margin="0,0,10,0" Visibility="Collapsed" Click="OnUpdateFrame"/>
