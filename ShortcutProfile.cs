@@ -12,7 +12,7 @@ public enum BoardCommand
     Group, Ungroup, ToggleLock, Delete, Bold, Fit, AddFrame, Present, Fullscreen, Settings,
     SelectTool, HandTool, TextTool, ListTool, PenTool, ArrowTool, EraserTool,
     NextFrame, PreviousFrame, PresentationNext, PresentationPrevious, PresentationFirst, PresentationLast,
-    MarkerTool, RectangleTool, EllipseTool, CalloutTool, AddTimeline, PresentationPointer, PresentationSpotlight, PresentationCurtain
+    ResetZoom, MarkerTool, RectangleTool, EllipseTool, CalloutTool, AddTimeline, PresentationPointer, PresentationSpotlight, PresentationCurtain
 }
 
 public readonly record struct ShortcutGesture(Key Key, ModifierKeys Modifiers = ModifierKeys.None)
@@ -60,6 +60,7 @@ public sealed class ShortcutProfile
         new(BoardCommand.Delete, "Удалить выделение", "Редактирование", ShortcutContext.Editor, false, new ShortcutGesture(Key.Delete)),
         new(BoardCommand.Bold, "Полужирный", "Редактирование", ShortcutContext.Editor, false, Ctrl(Key.B)),
         new(BoardCommand.Fit, "Показать все объекты", "Доска и кадры", ShortcutContext.Editor, false, Ctrl(Key.D0)),
+        new(BoardCommand.ResetZoom, "Обычный масштаб 100%", "Доска и кадры", ShortcutContext.Editor, false, Ctrl(Key.D1), Ctrl(Key.NumPad1)),
         new(BoardCommand.AddFrame, "Добавить кадр", "Доска и кадры", ShortcutContext.Editor, false, Ctrl(Key.Return)),
         new(BoardCommand.NextFrame, "Следующий кадр в редакторе", "Доска и кадры", ShortcutContext.Editor, false, new ShortcutGesture(Key.Next)),
         new(BoardCommand.PreviousFrame, "Предыдущий кадр в редакторе", "Доска и кадры", ShortcutContext.Editor, false, new ShortcutGesture(Key.Prior)),

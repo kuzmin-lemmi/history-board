@@ -324,6 +324,9 @@ public sealed class BoardSurface : FrameworkElement
     }
 
     public bool ShowStepBadges { get; set; } = true;
+    public bool ShowFrames { get; set; } = true;
+    public int ActiveFrame { get; set; } = -1;
+    public int HighlightedFrame { get; set; } = -1;
     public bool IsHidden(BoardItem item) => objects.TryGetValue(item.Id, out var visual) && visual.Opacity == 0;
     public void Redraw() => DrawSelection();
 
@@ -332,6 +335,19 @@ public sealed class BoardSurface : FrameworkElement
         using var dc = selection.RenderOpen();
         var scale = Math.Max(.02, camera.Matrix.M11);
         if (!marquee.IsEmpty) dc.DrawRectangle(Brush("#1458725B"), new Pen(Brush("#58725B"), 1 / scale), marquee);
+        if (ShowFrames)
+            for (var i = 0; i < Lesson.Frames.Count; i++)
+            {
+                // Each presentation frame is outlined on the board, like a slide laid on the table.
+                var frame = Lesson.Frames[i]; var active = i == ActiveFrame; var highlighted = active || i == HighlightedFrame;
+                var outline = new Pen(Brush(highlighted ? "#58725B" : "#A7B39C"), (highlighted ? 2 : 1.2) / scale);
+                if (!active) outline.DashStyle = new DashStyle([5, 4], 0);
+                dc.DrawRectangle(null, outline, frame.Bounds);
+                var caption = new FormattedText($"{i + 1}  {frame.Name}", CultureInfo.GetCultureInfo("ru-RU"), FlowDirection.LeftToRight, new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal), 12 / scale, highlighted ? Brushes.White : Brush("#6F7D68"), 1.0);
+                var tag = new Rect(frame.X, frame.Y - caption.Height - 6 / scale, caption.Width + 12 / scale, caption.Height + 4 / scale);
+                dc.DrawRoundedRectangle(highlighted ? Brush("#58725B") : Brush("#E9EEE2"), null, tag, 4 / scale, 4 / scale);
+                dc.DrawText(caption, new Point(tag.X + 6 / scale, tag.Y + 2 / scale));
+            }
         if (ShowStepBadges)
             foreach (var stepped in Lesson.Items.Where(i => i.Step > 0))
             {

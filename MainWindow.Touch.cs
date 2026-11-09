@@ -101,7 +101,7 @@ public partial class MainWindow
                 if (moveOriginals.TryGetValue(item.Id, out var original)) { item.X = original.X; item.Y = original.Y; item.Width = original.Width; item.Height = original.Height; }
             Surface.RefreshMany(Surface.SelectedItems);
         }
-        moving = null; moveOriginal = null; moveOriginals.Clear(); resizing = false; gestureBefore = null;
+        moving = null; moveOriginal = null; moveOriginals.Clear(); resizing = false; gestureBefore = null; pendingSelect = null;
         Surface.ReleaseMouseCapture(); UpdateUi();
     }
 }

@@ -88,8 +88,8 @@ public partial class MainWindow : Window
         Surface.Cursor = value switch { BoardTool.Text or BoardTool.List or BoardTool.Callout => Cursors.IBeam, BoardTool.Select => Cursors.Arrow, BoardTool.Hand => Cursors.Hand, BoardTool.Eraser => Cursors.No, _ => Cursors.Cross };
         ToolHelp.Text = value switch
         {
-            BoardTool.Text => "Клик — текст · Колёсико — шрифт · Пробел + мышь — двигать доску",
-            BoardTool.List => "Enter — следующий пункт · Esc — закончить ввод",
+            BoardTool.Text => "Клик — текст · Enter — готово · Shift+Enter — новая строка · Колёсико — шрифт",
+            BoardTool.List => "Enter — следующий пункт · Enter на пустом пункте — готово",
             BoardTool.Pen => "Мышь — рисовать · Колёсико — толщина · Пробел — двигать доску",
             BoardTool.Arrow => "Протяните стрелку · Shift — выравнивание · Пробел — двигать доску",
             BoardTool.Eraser => "Ластик удаляет пометку целиком · Закреплённые объекты защищены",
@@ -97,7 +97,7 @@ public partial class MainWindow : Window
             BoardTool.Marker => "Проведите полупрозрачную полосу поверх карты · Колёсико — ширина",
             BoardTool.Rectangle or BoardTool.Ellipse => "Протяните фигуру · Shift — квадрат/круг · «Заливка» — полупрозрачный цвет",
             BoardTool.Callout => "Нажмите на место, на которое указывает выноска, и протяните к месту подписи",
-            _ => "Перетаскивайте объекты · Двойной клик — текст · Пробел — двигать доску"
+            _ => "Тяните за любое место рамки выделения · Двойной клик — текст · Ctrl+1 — масштаб 100%"
         };
         UpdateProperties(); UpdateUi(); Surface.Focus();
     }
@@ -179,25 +179,7 @@ public partial class MainWindow : Window
         Surface.Focus();
         if (tool == BoardTool.Select)
         {
-            // The resize handle extends slightly beyond the image itself.
-            var selected = Surface.Selected;
-            var rect = Surface.SelectedBounds;
-            resizing = Surface.SelectedItems.Count == 1 && selected != null && BoardSurface.Resizable(selected) && !rect.IsEmpty && (point - new Point(rect.Right + 7 / zoom, rect.Bottom + 7 / zoom)).Length < 14 / zoom;
-            if (resizing) hit = selected;
-            if (hit == null)
-            {
-                marqueeStartSelection = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? Surface.SelectedItems.ToArray() : [];
-                Surface.SelectMany(marqueeStartSelection); selectingArea = true;
-                gestureStart = point; gesture = true; Surface.CaptureMouse(); UpdateUi(); e.Handled = true; return;
-            }
-            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) && !resizing) { Surface.ToggleSelection(hit); UpdateUi(); e.Handled = true; return; }
-            if (!Surface.SelectedItems.Contains(hit)) Surface.Select(hit);
-            if (Surface.SelectionLocked) { CopyProperties(hit); UpdateUi(); Status.Text = "Выделение содержит закреплённые объекты. Сначала открепите их."; return; }
-            if (hit.Kind is "text" or "callout" && e.ClickCount == 2) { BeginEditor(hit, point); return; }
-            if (hit.Kind == "timeline" && e.ClickCount == 2) { EditTimeline(hit); e.Handled = true; return; }
-            CopyProperties(hit);
-            moving = hit; moveOriginal = hit.Clone();
-            moveOriginals = Surface.SelectedItems.ToDictionary(i => i.Id, i => i.Clone());
+            if (PressSelect(point, hit, e.ClickCount, Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))) { e.Handled = true; return; }
         }
         else if (tool is BoardTool.Pen or BoardTool.Arrow or BoardTool.Marker)
         {
@@ -221,6 +203,40 @@ public partial class MainWindow : Window
         if (tool == BoardTool.Eraser) EraseAt(point);
         Surface.CaptureMouse(); UpdateUi(); e.Handled = true;
     }
+
+    // Returns true when the press is complete; false when it starts moving or resizing the selection.
+    internal bool PressSelect(Point point, BoardItem? hit, int clickCount, bool shift)
+    {
+        pendingSelect = null;
+        // The resize handle extends slightly beyond the image itself.
+        var selected = Surface.Selected;
+        var rect = Surface.SelectedBounds;
+        resizing = Surface.SelectedItems.Count == 1 && selected != null && BoardSurface.Resizable(selected) && !rect.IsEmpty && (point - new Point(rect.Right + 7 / zoom, rect.Bottom + 7 / zoom)).Length < 14 / zoom;
+        if (resizing) hit = selected;
+        // Anywhere inside the dashed selection frame grabs the selection, even between the strokes of a drawing.
+        // A click without dragging on another object inside the frame selects that object afterwards.
+        if (!resizing && !shift && selected != null && (hit == null || !Surface.SelectedItems.Contains(hit)))
+        {
+            var frame = rect; frame.Inflate(7 / zoom, 7 / zoom);
+            if (frame.Contains(point)) { pendingSelect = hit; hit = Surface.SelectedItems.FirstOrDefault(i => i.Kind != "image") ?? selected; }
+        }
+        if (hit == null)
+        {
+            marqueeStartSelection = shift ? Surface.SelectedItems.ToArray() : [];
+            Surface.SelectMany(marqueeStartSelection); selectingArea = true;
+            gestureStart = point; gesture = true; Surface.CaptureMouse(); UpdateUi(); return true;
+        }
+        if (shift && !resizing) { Surface.ToggleSelection(hit); UpdateUi(); return true; }
+        if (!Surface.SelectedItems.Contains(hit)) Surface.Select(hit);
+        if (Surface.SelectionLocked) { pendingSelect = null; CopyProperties(hit); UpdateUi(); Status.Text = "Выделение содержит закреплённые объекты. Сначала открепите их."; return true; }
+        if (hit.Kind is "text" or "callout" && clickCount == 2) { pendingSelect = null; BeginEditor(hit, point); return true; }
+        if (hit.Kind == "timeline" && clickCount == 2) { pendingSelect = null; EditTimeline(hit); return true; }
+        CopyProperties(hit);
+        moving = hit; moveOriginal = hit.Clone();
+        moveOriginals = Surface.SelectedItems.ToDictionary(i => i.Id, i => i.Clone());
+        return false;
+    }
+    private BoardItem? pendingSelect;
 
     private void OnBoardMove(object sender, MouseEventArgs e)
     {
@@ -304,9 +320,12 @@ public partial class MainWindow : Window
             draft = null; Surface.Preview(null);
         }
         else if (moving != null && moveOriginal != null)
+        {
             changed = moving.X != moveOriginal.X || moving.Y != moveOriginal.Y || moving.Width != moveOriginal.Width || moving.Height != moveOriginal.Height;
+            if (!changed && pendingSelect != null && lesson.Items.Contains(pendingSelect)) { Surface.Select(pendingSelect); CopyProperties(pendingSelect); }
+        }
         else if (tool == BoardTool.Eraser) changed = gestureBefore?.Items.Count != lesson.Items.Count;
-        moving = null; moveOriginal = null; moveOriginals.Clear();
+        moving = null; moveOriginal = null; moveOriginals.Clear(); pendingSelect = null;
         Surface.ReleaseMouseCapture();
         if (changed && gestureBefore != null) Changed(gestureBefore);
         gestureBefore = null; UpdateUi();
@@ -333,6 +352,7 @@ public partial class MainWindow : Window
         StyleEditor();
         EditLayer.IsHitTestVisible = true; Editor.Visibility = Visibility.Visible;
         UpdateUi(); Editor.Focus(); Editor.CaretIndex = Editor.Text.Length;
+        Status.Text = editing.Numbered ? "Enter — следующий пункт · Enter на пустом пункте — готово · Esc — готово" : "Enter — готово · Shift+Enter — новая строка · Esc — готово";
     }
 
     private void StyleEditor()
@@ -354,8 +374,34 @@ public partial class MainWindow : Window
     private void OnEditorLostFocus(object sender, KeyboardFocusChangedEventArgs e) => CommitEditor();
     private void OnEditorKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape || e.Key == Key.Enter && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
-        { CommitEditor(); Surface.Focus(); e.Handled = true; }
+        if (HandleEditorKey(e.Key, Keyboard.Modifiers)) e.Handled = true;
+    }
+
+    // Enter finishes a caption, Shift+Enter starts a new line. In a list Enter adds the next item,
+    // and Enter on an empty item finishes the list. Esc and Ctrl+Enter always finish.
+    internal bool HandleEditorKey(Key key, ModifierKeys modifiers)
+    {
+        if (editing == null) return false;
+        if (key == Key.Escape || key == Key.Enter && modifiers.HasFlag(ModifierKeys.Control)) { CommitEditor(); Surface.Focus(); return true; }
+        if (key != Key.Enter) return false;
+        if (modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            var caret = Editor.SelectionStart;
+            Editor.SelectedText = Environment.NewLine; Editor.CaretIndex = caret + Environment.NewLine.Length; Editor.SelectionLength = 0;
+            return true;
+        }
+        if (modifiers != ModifierKeys.None) return false;
+        if (editing.Numbered)
+        {
+            var text = Editor.Text; var caret = Editor.CaretIndex;
+            var start = caret == 0 ? 0 : text.LastIndexOf('\n', caret - 1) + 1;
+            var end = text.IndexOf('\n', caret); if (end < 0) end = text.Length;
+            if (text[start..end].Trim().Length > 0) return false; // the text box adds the next item
+            var removeFrom = start >= 2 && text[start - 2] == '\r' ? start - 2 : start > 0 ? start - 1 : start;
+            Editor.Text = text.Remove(removeFrom, end - removeFrom);
+        }
+        CommitEditor(); Surface.Focus();
+        return true;
     }
 
     private void CommitEditor()
@@ -364,6 +410,7 @@ public partial class MainWindow : Window
         var item = editing; var before = editBefore!;
         editing = null; editBefore = null;
         Editor.Visibility = Visibility.Collapsed; EditLayer.IsHitTestVisible = false;
+        item.Text = item.Text.TrimEnd('\n', ' ', '\t');
         if (string.IsNullOrWhiteSpace(item.Text)) Surface.Remove(item);
         else { Surface.HideItem(item, false); Surface.Refresh(item); Surface.Select(item); }
         var old = before.Items.FirstOrDefault(i => i.Id == item.Id);
@@ -407,6 +454,7 @@ public partial class MainWindow : Window
     {
         if (!ready || Viewport.ActualWidth < 100 || Viewport.ActualHeight < 100) return;
         var bounds = Surface.ContentBounds();
+        foreach (var frame in lesson.Frames) bounds.Union(frame.Bounds);
         if (bounds.IsEmpty) SetCamera(0, 0, 1);
         else { bounds.Inflate(48 / zoom, 48 / zoom); FocusRegion(bounds, false); }
         fitting = true;

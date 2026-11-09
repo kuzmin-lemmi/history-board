@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
 namespace HistoryBoard;
@@ -14,7 +15,41 @@ public partial class MainWindow
     private bool panning, spaceHeld, presenting, presentationWasFullscreen;
     private Point panStart;
     private double panStartX, panStartY;
-    private int activeFrame = -1;
+    private int activeFrame = -1, lastFrame = -1;
+    private readonly Dictionary<string, Image> frameImages = [];
+    private readonly Dictionary<string, (string Key, BitmapSource Image)> frameThumbnails = [];
+    private DispatcherTimer? thumbnailTimer;
+
+    // Thumbnails are rendered shortly after editing pauses, so typing and drawing stay smooth.
+    private void ScheduleFrameThumbnails()
+    {
+        if (thumbnailTimer == null)
+        {
+            thumbnailTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(600) };
+            thumbnailTimer.Tick += (_, _) => { if (editing != null || gesture || panning) return; thumbnailTimer.Stop(); RefreshFrameThumbnails(); };
+        }
+        thumbnailTimer.Stop(); thumbnailTimer.Start();
+    }
+
+    internal void RefreshFrameThumbnails()
+    {
+        foreach (var frame in lesson.Frames.Take(80))
+        {
+            var key = $"{revision}|{frame.X}|{frame.Y}|{frame.Width}|{frame.Height}|{lesson.Paper}";
+            if (!frameThumbnails.TryGetValue(frame.Id, out var cached) || cached.Key != key)
+            {
+                try { cached = (key, Surface.RenderBitmap(frame.Bounds, 128, true)); frameThumbnails[frame.Id] = cached; }
+                catch { continue; }
+            }
+            if (frameImages.TryGetValue(frame.Id, out var image)) image.Source = cached.Image;
+        }
+    }
+
+    private void OnUpdateFrame(object sender, RoutedEventArgs e)
+    {
+        if (lastFrame < 0 || lastFrame >= lesson.Frames.Count) return;
+        CommitEditor(); FinishGesture(); RecaptureFrame(lesson.Frames[lastFrame]); Surface.Focus();
+    }
     private readonly Dictionary<string, Button> frameButtons = [];
     private readonly DispatcherTimer cameraTimer = new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(16) };
     private long cameraAnimationStart;
@@ -33,6 +68,8 @@ public partial class MainWindow
         cameraX = nextX; cameraY = nextY; zoom = nextZoom; fitting = false;
         Surface.SetCamera(cameraX, cameraY, zoom);
         ZoomValue.Text = $"{zoom * 100:0}%";
+        // Far from the normal scale the percentage turns into a visible "back to 100%" button.
+        ZoomResetButton.Background = Math.Abs(zoom - 1) > .05 ? BoardSurface.Brush("#E6EDDF") : Brushes.Transparent;
         StoreCamera();
         if (changed) viewRevision++;
         if (track && changed)
@@ -129,14 +166,24 @@ public partial class MainWindow
     }
     private void OnLock(object sender, RoutedEventArgs e) => ToggleLock();
 
+    // Returns to the normal 1:1 scale around the centre of the current view.
+    internal void ResetZoom(bool animate = true)
+    {
+        if (Viewport.ActualWidth < 1) return;
+        var view = VisibleRegion; var center = new Point(view.X + view.Width / 2, view.Y + view.Height / 2);
+        FocusRegion(new Rect(center.X - Viewport.ActualWidth / 2, center.Y - Viewport.ActualHeight / 2, Viewport.ActualWidth, Viewport.ActualHeight), animate);
+        Status.Text = "● Обычный масштаб 100%";
+    }
+    private void OnZoomReset(object sender, RoutedEventArgs e) { ResetZoom(); Surface.Focus(); }
+
     private void AddFrame(string? name = null)
     {
         CommitEditor(); FinishGesture(); StopCameraAnimation();
         if (lesson.Frames.Count >= 500) { Status.Text = "В одном уроке можно сохранить до 500 кадров."; return; }
         var before = lesson.Clone(); var region = VisibleRegion;
         var frame = new LessonFrame { Name = name ?? $"Кадр {lesson.Frames.Count + 1}", X = region.X, Y = region.Y, Width = region.Width, Height = region.Height };
-        lesson.Frames.Add(frame); activeFrame = lesson.Frames.Count - 1; Changed(before);
-        Status.Text = "● Кадр сохранён. Двойной клик по его названию — переименовать, правая кнопка — настройки.";
+        lesson.Frames.Add(frame); activeFrame = lastFrame = lesson.Frames.Count - 1; Changed(before);
+        Status.Text = $"● Кадр {lesson.Frames.Count} сохранён — рамка на доске показывает, что увидят ученики. Переместитесь к следующему материалу и снова нажмите «＋ Кадр».";
         Surface.Focus();
     }
     private void OnAddFrame(object sender, RoutedEventArgs e) => AddFrame();
@@ -144,12 +191,19 @@ public partial class MainWindow
     private void RebuildFrames()
     {
         if (activeFrame >= lesson.Frames.Count) activeFrame = lesson.Frames.Count - 1;
-        FrameButtons.Children.Clear(); frameButtons.Clear();
+        FrameButtons.Children.Clear(); frameButtons.Clear(); frameImages.Clear();
         FrameHint.Visibility = lesson.Frames.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         for (var i = 0; i < lesson.Frames.Count; i++)
         {
             var frame = lesson.Frames[i]; var index = i;
-            var button = new Button { Content = $"{i + 1}  {frame.Name}", FontSize = 11, Padding = new Thickness(11, 5, 11, 5), Margin = new Thickness(0, 0, 5, 0), MaxWidth = 190, ToolTip = "Перейти к кадру. Двойной клик — название. Правая кнопка — настройки." };
+            var thumbnail = new Image { Width = 64, Height = 38, Stretch = Stretch.Uniform, Source = frameThumbnails.TryGetValue(frame.Id, out var cached) ? cached.Image : null };
+            var face = new StackPanel { Orientation = Orientation.Horizontal };
+            face.Children.Add(new Border { Child = thumbnail, BorderBrush = BoardSurface.Brush("#DCE3D4"), BorderThickness = new Thickness(1), Background = BoardSurface.Brush("#FAF7EF"), Margin = new Thickness(0, 0, 7, 0) });
+            face.Children.Add(new TextBlock { Text = $"{i + 1}  {frame.Name}", VerticalAlignment = VerticalAlignment.Center, MaxWidth = 120, TextTrimming = TextTrimming.CharacterEllipsis });
+            frameImages[frame.Id] = thumbnail;
+            var button = new Button { Content = face, FontSize = 11, Padding = new Thickness(4, 3, 10, 3), Margin = new Thickness(0, 0, 6, 0), ToolTip = "Перейти к кадру. Двойной клик — название. Правая кнопка — порядок, обновление, удаление." };
+            button.MouseEnter += (_, _) => { Surface.HighlightedFrame = index; Surface.Redraw(); };
+            button.MouseLeave += (_, _) => { Surface.HighlightedFrame = -1; Surface.Redraw(); };
             button.Click += (_, _) => GoToFrame(index);
             button.MouseDoubleClick += (_, e) => { RenameFrame(frame); e.Handled = true; };
             var menu = new ContextMenu();
@@ -161,7 +215,7 @@ public partial class MainWindow
             menu.Items.Add(new Separator()); Menu("Удалить кадр (объекты останутся)", () => RemoveFrame(frame));
             button.ContextMenu = menu; frameButtons[frame.Id] = button; FrameButtons.Children.Add(button);
         }
-        UpdateFrameSelection();
+        UpdateFrameSelection(); ScheduleFrameThumbnails();
     }
 
     private void UpdateFrameSelection()
@@ -170,13 +224,20 @@ public partial class MainWindow
         for (var i = 0; i < lesson.Frames.Count; i++)
             if (frameButtons.TryGetValue(lesson.Frames[i].Id, out var button)) button.Background = i == activeFrame ? BoardSurface.Brush("#DDE8D3") : BoardSurface.Brush("#F0F3EB");
         if (activeFrame >= 0 && activeFrame < lesson.Frames.Count) PresentationLabel.Text = $"{activeFrame + 1} / {lesson.Frames.Count}   {lesson.Frames[activeFrame].Name}";
+        if (lastFrame >= lesson.Frames.Count) lastFrame = -1;
+        // After moving away from a frame, offer to store the new view in it.
+        UpdateFrameButton.Visibility = !presenting && activeFrame < 0 && lastFrame >= 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (lastFrame >= 0) UpdateFrameButton.Content = $"↻ Обновить кадр {lastFrame + 1}";
+        UpdateFrameButton.ToolTip = lastFrame >= 0 ? $"Запомнить текущий вид в кадр «{lesson.Frames[lastFrame].Name}»" : null;
+        TrayPresentButton.IsEnabled = lesson.Frames.Count > 0;
+        if (Surface.ActiveFrame != activeFrame) { Surface.ActiveFrame = activeFrame; Surface.Redraw(); }
     }
 
     private void GoToFrame(int index, bool animate = true)
     {
         if (index < 0 || index >= lesson.Frames.Count) return;
         CommitEditor(); FinishGesture(); EndPan();
-        activeFrame = index; Surface.Select(null); FocusRegion(lesson.Frames[index].Bounds, animate);
+        activeFrame = lastFrame = index; Surface.Select(null); FocusRegion(lesson.Frames[index].Bounds, animate);
         UpdateFrameSelection();
         if (presenting) ApplyReveal();
         if (frameButtons.TryGetValue(lesson.Frames[index].Id, out var button)) button.BringIntoView();
@@ -206,18 +267,19 @@ public partial class MainWindow
     {
         StopCameraAnimation(); var before = lesson.Clone(); var view = VisibleRegion;
         frame.X = view.X; frame.Y = view.Y; frame.Width = view.Width; frame.Height = view.Height;
-        activeFrame = lesson.Frames.IndexOf(frame); Changed(before);
+        activeFrame = lastFrame = lesson.Frames.IndexOf(frame); Changed(before);
+        Status.Text = $"● Кадр {activeFrame + 1} теперь показывает текущий вид";
     }
     private void MoveFrame(LessonFrame frame, int delta)
     {
         var index = lesson.Frames.IndexOf(frame); var target = index + delta;
         if (index < 0 || target < 0 || target >= lesson.Frames.Count) return;
-        var before = lesson.Clone(); lesson.Frames.RemoveAt(index); lesson.Frames.Insert(target, frame); activeFrame = target; Changed(before);
+        var before = lesson.Clone(); lesson.Frames.RemoveAt(index); lesson.Frames.Insert(target, frame); activeFrame = lastFrame = target; Changed(before);
     }
     private void RemoveFrame(LessonFrame frame)
     {
         if (!lesson.Frames.Contains(frame)) return;
-        var before = lesson.Clone(); lesson.Frames.Remove(frame); activeFrame = -1; Changed(before);
+        var before = lesson.Clone(); lesson.Frames.Remove(frame); activeFrame = lastFrame = -1; frameThumbnails.Remove(frame.Id); Changed(before);
     }
 
     private void StartPresentation()
@@ -226,7 +288,7 @@ public partial class MainWindow
         CommitEditor(); FinishGesture(); EndPan(); StopCameraAnimation();
         if (lesson.Frames.Count == 0) AddFrame();
         presenting = true; presentationWasFullscreen = fullscreen; revealStep = 0;
-        Surface.Select(null); Surface.ShowStepBadges = false; Surface.Redraw();
+        Surface.Select(null); Surface.ShowStepBadges = false; Surface.ShowFrames = false; Surface.Redraw();
         Overlay.Visibility = Visibility.Visible; Overlay.HasPointer = false; SetPresentationTool(PresentationTool.None);
         MainHeader.Visibility = PropertyBar.Visibility = ToolRail.Visibility = FramesTray.Visibility = StatusBar.Visibility = ZoomControls.Visibility = Visibility.Collapsed;
         ToolColumn.Width = new GridLength(0); PresentationControls.Visibility = Visibility.Visible;
@@ -237,7 +299,7 @@ public partial class MainWindow
     {
         if (!presenting) return;
         StopCameraAnimation(); SetPresentationTool(PresentationTool.None); EndCurtainDrag(); presenting = false;
-        Overlay.Visibility = Visibility.Collapsed; ShowAllSteps(); Surface.ShowStepBadges = true; Surface.Redraw(); RestoreToolCursor();
+        Overlay.Visibility = Visibility.Collapsed; ShowAllSteps(); Surface.ShowStepBadges = true; Surface.ShowFrames = true; Surface.Redraw(); RestoreToolCursor();
         MainHeader.Visibility = PropertyBar.Visibility = ToolRail.Visibility = FramesTray.Visibility = StatusBar.Visibility = ZoomControls.Visibility = Visibility.Visible;
         ToolColumn.Width = new GridLength(48); PresentationControls.Visibility = Visibility.Collapsed;
         if (fullscreen != presentationWasFullscreen) ToggleFullscreen();
