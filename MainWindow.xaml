@@ -53,7 +53,7 @@
       <Border x:Name="ToolRail" Background="#FAFBF8" BorderBrush="#E4E8E0" BorderThickness="0,0,1,0">
         <DockPanel Margin="4,9,4,7"><Button DockPanel.Dock="Bottom" Content="?" FontSize="17" Padding="5,4" Foreground="#7B827C" Click="OnHelp" ToolTip="Помощь"/><StackPanel x:Name="Tools"/></DockPanel>
       </Border>
-      <Grid x:Name="Viewport" Grid.Column="1" Background="#FAF7EF" ClipToBounds="True" SizeChanged="OnViewportChanged" PreviewMouseWheel="OnWheel">
+      <Grid x:Name="Viewport" Grid.Column="1" Background="#FAF7EF" ClipToBounds="True" SizeChanged="OnViewportChanged" PreviewMouseWheel="OnWheel" TouchDown="OnViewportTouchDown" TouchMove="OnViewportTouchMove" TouchUp="OnViewportTouchUp" LostTouchCapture="OnViewportLostTouchCapture" Stylus.IsPressAndHoldEnabled="False" Stylus.IsFlicksEnabled="False" Stylus.IsTapFeedbackEnabled="False">
         <local:BoardSurface x:Name="Surface" PreviewMouseDown="OnSurfaceMouseDown" PreviewMouseUp="OnSurfaceMouseUp" MouseLeftButtonDown="OnBoardDown" MouseMove="OnBoardMove" MouseLeftButtonUp="OnBoardUp" LostMouseCapture="OnLostCapture"/>
         <StackPanel x:Name="EmptyHint" IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,30">
           <TextBlock Text="Место для большой истории" FontSize="25" FontWeight="SemiBold" Foreground="#7C8C70" HorizontalAlignment="Center"/>

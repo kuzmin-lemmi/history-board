@@ -54,9 +54,10 @@ public partial class MainWindow
             {
                 await Task.Run(() =>
                 {
-                    LessonFile.Save(AutosavePath, snapshot, data);
-                    if (currentPath != null) LessonFile.Save(currentPath, snapshot, data);
+                    LessonFile.Save(AutosavePath, snapshot, data, true);
+                    if (currentPath != null) LessonFile.Save(currentPath, snapshot, data, true);
                 });
+                WriteSessionInfo(currentPath, currentPath == null && HasUnsavedChanges);
             }
             finally { saveGate.Release(); }
             var start = new ProcessStartInfo(installerPath) { UseShellExecute = true };

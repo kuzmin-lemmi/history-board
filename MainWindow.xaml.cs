@@ -157,7 +157,7 @@ public partial class MainWindow : Window
 
     private void OnBoardDown(object sender, MouseButtonEventArgs e)
     {
-        if (presenting) return;
+        if (presenting || touchNavigating) return;
         StopCameraAnimation();
         if (tool == BoardTool.Hand) { BeginPan(e.GetPosition(Viewport)); e.Handled = true; return; }
         CommitEditor();
@@ -455,33 +455,29 @@ public partial class MainWindow : Window
     private Dictionary<string, byte[]> UsedAssets(Lesson snapshot) => snapshot.Items.Where(i => i.AssetId != null).Select(i => i.AssetId!).Distinct().ToDictionary(id => id, id => assets[id]);
 
     private void ScheduleAutosave() { autosaveTimer.Stop(); autosaveTimer.Start(); }
-    private async Task AutosaveAsync()
+    private async Task<bool> AutosaveAsync()
     {
         autosaveTimer.Stop();
-        if (editing != null || gesture || panning) { autosaveTimer.Start(); return; }
-        if (autosavedRevision == revision && autosavedViewRevision == viewRevision) return;
+        if (editing != null || gesture || panning) { autosaveTimer.Start(); return false; }
+        if (autosavedRevision == revision && autosavedViewRevision == viewRevision) return true;
         StoreCamera();
         var snapshot = lesson.Clone(); var data = UsedAssets(snapshot); var value = revision; var viewValue = viewRevision;
+        var source = currentPath; var dirty = HasUnsavedChanges;
         try
         {
             await saveGate.WaitAsync();
-            try { await Task.Run(() => LessonFile.Save(AutosavePath, snapshot, data)); } finally { saveGate.Release(); }
+            try
+            {
+                await Task.Run(() => { LessonFile.Save(AutosavePath, snapshot, data, true); KeepAutosaveHistory(); });
+                // Saving to the lesson file may have finished while the autosave was running.
+                WriteSessionInfo(source, dirty && !(currentPath == source && savedRevision >= value));
+            }
+            finally { saveGate.Release(); }
             if (revision == value && viewRevision == viewValue) { autosavedRevision = value; autosavedViewRevision = viewValue; Status.Text = "●  Автосохранено на компьютере"; }
             else ScheduleAutosave();
+            return true;
         }
-        catch { Status.Text = "Автосохранение недоступно. Сохраните урок через Ctrl+S."; }
-    }
-    private void RestoreAutosave()
-    {
-        if (!File.Exists(AutosavePath)) return;
-        try
-        {
-            var result = LessonFile.Load(AutosavePath);
-            lesson = result.Lesson; assets = result.Assets;
-            Surface.SetLesson(lesson, assets); LessonTitle.Text = lesson.Title;
-            RestoreCamera(); autosavedRevision = revision; autosavedViewRevision = viewRevision; UpdateUi(); Status.Text = "●  Восстановлен последний урок";
-        }
-        catch { Status.Text = "Последний урок не восстановлен. Можно открыть сохранённый файл."; }
+        catch (Exception ex) { Status.Text = "Автосохранение недоступно: " + ex.Message + " Сохраните урок через Ctrl+S."; return false; }
     }
 
     private async Task<bool> SaveLessonAsync(bool saveAs = false)
@@ -499,8 +495,13 @@ public partial class MainWindow : Window
         try
         {
             await saveGate.WaitAsync();
-            try { await Task.Run(() => LessonFile.Save(path, snapshot, data)); } finally { saveGate.Release(); }
-            if (ReferenceEquals(activeLesson, lesson)) { currentPath = path; savedRevision = value; }
+            try { await Task.Run(() => LessonFile.Save(path, snapshot, data, true)); } finally { saveGate.Release(); }
+            if (ReferenceEquals(activeLesson, lesson))
+            {
+                currentPath = path; savedRevision = value;
+                // Keep the autosave linked to this file, so the next start knows it is saved.
+                if (autosavedRevision == revision && autosavedViewRevision == viewRevision) WriteSessionInfo(currentPath, HasUnsavedChanges); else ScheduleAutosave();
+            }
             UpdateUi(); Status.Text = "●  Урок сохранён: " + Path.GetFileName(path); RememberLesson(path, snapshot, preview); return true;
         }
         catch (Exception ex) { Error("Не удалось сохранить урок", ex); return false; }
@@ -535,7 +536,7 @@ public partial class MainWindow : Window
             revision++; savedRevision = revision; Surface.SetLesson(lesson, assets); LessonTitle.Text = lesson.Title;
             UpdateUi(); RestoreCamera(); ScheduleAutosave(); Status.Text = "●  Урок открыт: " + Path.GetFileName(path); RememberLesson(path, lesson, CaptureLessonPreview());
         }
-        catch (Exception ex) { Error("Не удалось открыть урок", ex); }
+        catch (Exception ex) { if (!await OpenBackupAfterFailureAsync(path, ex)) Error("Не удалось открыть урок", ex); }
     }
     private void OnExport(object sender, RoutedEventArgs e)
     {
@@ -589,7 +590,10 @@ public partial class MainWindow : Window
     {
         if (closing) return;
         e.Cancel = true; EndPan(); CommitEditor(); FinishGesture(); CommitTitle(); StopCameraAnimation(); autosaveTimer.Stop();
-        await AutosaveAsync();
+        if (!await ConfirmCloseAsync()) return;
+        if (!await AutosaveAsync() && HasUnsavedChanges &&
+            MessageBox.Show(this, "Автосохранение не удалось, несохранённые изменения будут потеряны. Всё равно закрыть доску?", "Доска истории", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            return;
         closing = true; Close();
     }
 }

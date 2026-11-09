@@ -165,6 +165,7 @@ public partial class MainWindow
         await RunLibraryFeatureTests(directory, Check);
         RunPaperFeatureTests(directory, Check);
         await RunShortcutFeatureTests(directory, Check);
+        await RunReliabilityFeatureTests(directory, Check);
 
         var performance = new Stopwatch(); performance.Start();
         var stressLesson = new Lesson();

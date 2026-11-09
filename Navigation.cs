@@ -117,7 +117,7 @@ public partial class MainWindow
     }
     private void RestoreToolCursor() => Surface.Cursor = spaceHeld || tool == BoardTool.Hand ? Cursors.Hand : tool is BoardTool.Text or BoardTool.List ? Cursors.IBeam : tool == BoardTool.Select ? Cursors.Arrow : tool == BoardTool.Eraser ? Cursors.No : Cursors.Cross;
     private void OnKeyUp(object sender, KeyEventArgs e) { if (e.Key == Key.Space) { spaceHeld = false; if (!panning) RestoreToolCursor(); } }
-    private void OnDeactivated(object? sender, EventArgs e) { spaceHeld = false; EndPan(); FinishGesture(); RestoreToolCursor(); }
+    private void OnDeactivated(object? sender, EventArgs e) { spaceHeld = false; touches.Clear(); touchNavigating = false; EndPan(); FinishGesture(); RestoreToolCursor(); }
 
     private void ToggleLock()
     {

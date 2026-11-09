@@ -78,6 +78,7 @@ public partial class MainWindow
             }
         }
         LessonFile.Validate(new Lesson { Items = copies.ToList() });
+        EnsureAssetSpace(newAssets.Values.Sum(b => (long)b.Length));
         var before = lesson.Clone();
         foreach (var pair in newAssets) { assets[pair.Key] = pair.Value; Surface.AddImage(pair.Key, decoded[pair.Key]); }
         foreach (var item in copies) Surface.Add(item);
@@ -120,14 +121,23 @@ public partial class MainWindow
         catch (Exception ex) { Status.Text = "Не удалось вставить: " + ex.Message; }
     }
 
+    private void EnsureAssetSpace(long added)
+    {
+        var used = LessonFile.AssetBytes(lesson, assets);
+        if (used + added > LessonFile.MaxAssetBytes)
+            throw new InvalidDataException($"Изображения урока уже занимают {LessonFile.Megabytes(used)}, а в одном файле помещается до {LessonFile.Megabytes(LessonFile.MaxAssetBytes)}. Удалите часть карт или начните новый урок.");
+    }
+
     private async Task AddImageBytesAsync(byte[] bytes)
     {
         if (bytes.Length > 40 * 1024 * 1024) throw new InvalidDataException("Используйте изображение до 40 МБ.");
         var activeLesson = lesson;
-        var image = await Task.Run(() => LessonFile.DecodeImage(bytes));
+        BitmapSource image = null!;
+        bytes = await Task.Run(() => { var compact = LessonFile.CompactImage(bytes); image = LessonFile.DecodeImage(compact); return compact; });
         if (activeLesson != lesson) { Status.Text = "Урок изменился. Вставьте изображение ещё раз."; return; }
         CommitEditor(); FinishGesture();
         if (lesson.Items.Count >= 20000) throw new InvalidDataException("В уроке может быть до 20 000 объектов.");
+        EnsureAssetSpace(bytes.Length);
         var before = lesson.Clone(); var id = Guid.NewGuid().ToString("N");
         var visible = VisibleRegion;
         var factor = Math.Min(visible.Width * .82 / image.PixelWidth, visible.Height * .82 / image.PixelHeight);

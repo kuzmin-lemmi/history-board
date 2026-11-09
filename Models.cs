@@ -69,30 +69,67 @@ public sealed class Lesson
 public static class LessonFile
 {
     public const long MaxFileSize = 150 * 1024 * 1024;
+    public const int MaxJsonSize = 20 * 1024 * 1024;
+    // Images are stored uncompressed; together with the lesson data they must stay below MaxFileSize,
+    // otherwise Save would produce a file that Load rejects.
+    public const long MaxAssetBytes = MaxFileSize - MaxJsonSize;
+    public const int WorkingImageWidth = 3600;
+    public const string BackupExtension = ".bak";
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
-    public static void Save(string path, Lesson lesson, IReadOnlyDictionary<string, byte[]> assets)
+    public static string BackupPath(string path) => path + BackupExtension;
+
+    public static long AssetBytes(Lesson lesson, IReadOnlyDictionary<string, byte[]> assets) =>
+        lesson.Items.Where(i => i.AssetId != null).Select(i => i.AssetId!).Distinct().Sum(id => assets.TryGetValue(id, out var bytes) ? (long)bytes.Length : 0);
+
+    public static string Megabytes(long bytes) => $"{Math.Ceiling(bytes / (1024.0 * 1024.0)):0} МБ";
+
+    public static void Save(string path, Lesson lesson, IReadOnlyDictionary<string, byte[]> assets, bool keepBackup = false)
     {
-        var directory = Path.GetDirectoryName(Path.GetFullPath(path))!;
+        path = Path.GetFullPath(path);
+        var directory = Path.GetDirectoryName(path)!;
         Directory.CreateDirectory(directory);
+        var json = JsonSerializer.SerializeToUtf8Bytes(lesson, JsonOptions);
+        if (json.Length > MaxJsonSize) throw new InvalidDataException("Слишком много данных на доске. Удалите часть пометок или разделите урок на несколько файлов.");
+        var ids = lesson.Items.Where(i => i.AssetId != null).Select(i => i.AssetId!).Distinct().ToArray();
+        foreach (var id in ids) if (!assets.ContainsKey(id)) throw new InvalidDataException("Не найдена карта урока.");
+        var assetBytes = AssetBytes(lesson, assets);
+        if (assetBytes > MaxAssetBytes)
+            throw new InvalidDataException($"Изображения урока занимают {Megabytes(assetBytes)}, а в одном файле помещается до {Megabytes(MaxAssetBytes)}. Удалите или уменьшите часть карт.");
         var temporary = Path.Combine(directory, $".{Guid.NewGuid():N}.tmp");
         try
         {
-            using (var file = File.Create(temporary))
-            using (var zip = new ZipArchive(file, ZipArchiveMode.Create))
+            using (var file = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
             {
-                using (var stream = zip.CreateEntry("lesson.json", CompressionLevel.Fastest).Open())
-                    JsonSerializer.Serialize(stream, lesson, JsonOptions);
-                foreach (var id in lesson.Items.Where(i => i.AssetId != null).Select(i => i.AssetId!).Distinct())
+                using (var zip = new ZipArchive(file, ZipArchiveMode.Create, true))
                 {
-                    if (!assets.TryGetValue(id, out var bytes)) throw new InvalidDataException("Не найдена карта урока.");
-                    using var stream = zip.CreateEntry("assets/" + id, CompressionLevel.NoCompression).Open();
-                    stream.Write(bytes);
+                    using (var stream = zip.CreateEntry("lesson.json", CompressionLevel.Fastest).Open())
+                        stream.Write(json);
+                    foreach (var id in ids)
+                    {
+                        using var stream = zip.CreateEntry("assets/" + id, CompressionLevel.NoCompression).Open();
+                        stream.Write(assets[id]);
+                    }
                 }
+                // Make sure the data reaches the disk before it replaces the previous file:
+                // a power cut in the classroom must leave either the old or the new lesson intact.
+                file.Flush(true);
             }
-            File.Move(temporary, path, true);
+            Replace(temporary, path, keepBackup ? BackupPath(path) : null);
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
+    }
+
+    private static void Replace(string temporary, string path, string? backup)
+    {
+        if (backup == null || !File.Exists(path)) { File.Move(temporary, path, true); return; }
+        try { File.Replace(temporary, path, backup, true); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        {
+            // Some removable and network drives do not support ReplaceFile.
+            File.Copy(path, backup, true);
+            File.Move(temporary, path, true);
+        }
     }
 
     public static (Lesson Lesson, Dictionary<string, byte[]> Assets) Load(string path)
@@ -101,7 +138,7 @@ public static class LessonFile
         using var zip = ZipFile.OpenRead(path);
         if (zip.Entries.Sum(e => e.Length) > MaxFileSize) throw new InvalidDataException("Распакованный урок превышает 150 МБ.");
         var entry = zip.GetEntry("lesson.json") ?? throw new InvalidDataException("Это не файл урока.");
-        if (entry.Length > 20 * 1024 * 1024) throw new InvalidDataException("Слишком много данных на доске.");
+        if (entry.Length > MaxJsonSize) throw new InvalidDataException("Слишком много данных на доске.");
         Lesson lesson;
         using (var stream = entry.Open()) lesson = JsonSerializer.Deserialize<Lesson>(stream) ?? throw new InvalidDataException("Пустой файл.");
         Validate(lesson);
@@ -165,9 +202,26 @@ public static class LessonFile
         image.BeginInit();
         image.CacheOption = BitmapCacheOption.OnLoad;
         image.StreamSource = stream;
-        if (frame.PixelWidth > 3600) image.DecodePixelWidth = 3600;
+        if (frame.PixelWidth > WorkingImageWidth) image.DecodePixelWidth = WorkingImageWidth;
         image.EndInit();
         image.Freeze();
         return image;
+    }
+
+    // The board never shows more than WorkingImageWidth pixels of a map, so storing the full
+    // original only wastes space in the lesson file. Re-encode large images at working size and
+    // keep whichever version is smaller.
+    public static byte[] CompactImage(byte[] bytes)
+    {
+        using var stream = new MemoryStream(bytes, false);
+        var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.None);
+        var frame = decoder.Frames[0];
+        if (frame.PixelWidth <= WorkingImageWidth && bytes.Length <= 12 * 1024 * 1024) return bytes;
+        var image = DecodeImage(bytes);
+        BitmapEncoder encoder = decoder is JpegBitmapDecoder ? new JpegBitmapEncoder { QualityLevel = 90 } : new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(image));
+        using var output = new MemoryStream();
+        encoder.Save(output);
+        return output.Length < bytes.Length ? output.ToArray() : bytes;
     }
 }

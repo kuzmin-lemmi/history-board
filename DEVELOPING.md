@@ -33,6 +33,9 @@ pwsh -NoProfile -File .\dev.ps1 -Task test -Offline
 | `ShortcutProfile.cs` | Команды, сочетания, контексты, проверка конфликтов и сохранение |
 | `SettingsWindow.xaml`, `SettingsWindow.xaml.cs` | Настройки горячих клавиш и захват сочетаний |
 | `MainWindow.Shortcuts.cs`, `ShortcutFeatureTests.cs` | Выполнение команд, актуальные подсказки и проверки переназначения |
+| `MainWindow.Session.cs` | Связь автосохранения с файлом урока, вопрос при закрытии, история и восстановление из копий |
+| `MainWindow.Touch.cs` | Касания: два пальца — перемещение и масштаб, смахивание в показе |
+| `ReliabilityFeatureTests.cs` | Проверки лимитов размера, резервных копий, восстановления сеанса и касаний |
 
 ## Сборка для распространения
 
