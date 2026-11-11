@@ -1,0 +1,1010 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Интерактивный учебник по программе «Доска истории»: надписи, карты, лента времени, кадры, плашки, указка и таймер.">
+<style>
+:root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; font: 14px/1.5 system-ui, sans-serif; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+<title>Учебник «Доски истории»</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=PT+Serif:wght@400;700&family=Golos+Text:wght@400;500;600&display=swap">
+<style>
+/* Layout: one lesson card at a time, like a frame of the board; a rail of chapters above, a practice area inside each card. */
+:root {
+  --paper: #FAF7EF; --surface: #FFFDF8; --ink: #26352F; --muted: #5F6B62; --line: #E3DFD2;
+  --green: #58725B; --green-soft: #E6EDDF; --gold: #D69A38; --red: #C94F49; --blue: #427CB3;
+  --board: #FAF7EF; --board-grid: #E9E5D8; --board-ink: #26352F; --chrome: #FCFDFB; --chrome-line: #E4E8E0;
+  --display: "PT Serif", Georgia, "Times New Roman", serif;
+  --body: "Golos Text", "Segoe UI", system-ui, sans-serif;
+  --radius: 8px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #171C19; --surface: #1F2622; --ink: #E7E5DA; --muted: #A8B1A6; --line: #343D37;
+  --green: #8DB08F; --green-soft: #2A3A2D; --gold: #E2B05A; --red: #E07A72; --blue: #79A7D6; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #171C19; --surface: #1F2622; --ink: #E7E5DA; --muted: #A8B1A6; --line: #343D37;
+  --green: #8DB08F; --green-soft: #2A3A2D; --gold: #E2B05A; --red: #E07A72; --blue: #79A7D6; color-scheme: dark }
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { background: var(--paper); color: var(--ink); font: 16px/1.55 var(--body); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--paper); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 28px; display: flex; flex-direction: column; gap: 16px; min-height: 100%; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(2rem, 4.5vw, 3.1rem); }
+h2 { font-size: clamp(1.55rem, 3vw, 2.1rem); }
+h3 { font-size: 1.15rem; }
+p { margin: 0; max-width: 66ch; }
+.eyebrow { font-size: .75rem; letter-spacing: .12em; text-transform: uppercase; color: var(--green); font-weight: 600; }
+.muted { color: var(--muted); }
+a { color: var(--green); }
+a.card { color: inherit; text-decoration: none; }
+a.card:hover { border-color: var(--green); }
+kbd { font: 600 .8em var(--body); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: .05em .4em; background: var(--surface); white-space: nowrap; }
+
+/* top: brand, chapter rail, progress */
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+.brand-mark { width: 34px; height: 34px; border-radius: 8px; background: var(--green); display: grid; place-items: center; color: #fff; font-family: var(--display); font-size: 1.1rem; }
+.progress { flex: 1 1 220px; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.bar { flex: 1; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--green); transition: width .3s; }
+.counter { font-variant-numeric: tabular-nums; font-size: .85rem; color: var(--muted); white-space: nowrap; }
+.toc-toggle { border: 1px solid var(--line); background: var(--surface); border-radius: var(--radius); padding: 6px 12px; }
+.toc { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.toc button { text-align: left; border: 0; background: transparent; padding: 6px 8px; border-radius: 6px; display: flex; gap: 8px; }
+.toc button:hover { background: var(--green-soft); }
+.toc button.current { background: var(--green-soft); font-weight: 600; }
+.toc b { font-variant-numeric: tabular-nums; color: var(--green); min-width: 1.6em; }
+.toc .done b::after { content: " ✓"; }
+
+/* slide */
+.slide { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: clamp(18px, 3vw, 34px); display: flex; flex-direction: column; gap: 18px; flex: 1; }
+.slide-head { display: flex; flex-direction: column; gap: 8px; }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 24px; align-items: start; }
+.cols > * { min-width: 0; }
+@media (max-width: 820px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+.steps { margin: 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: 8px; }
+.tasks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tasks li { display: flex; gap: 10px; align-items: baseline; }
+.tasks li::before { content: ""; flex: none; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line); transform: translateY(3px); }
+.tasks li.ok::before { background: var(--green); border-color: var(--green); }
+.tasks li.ok { color: var(--muted); }
+.tasks-title { font-size: .8rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.note { border-left: 3px solid var(--gold); padding: 6px 12px; background: color-mix(in srgb, var(--gold) 9%, transparent); border-radius: 0 6px 6px 0; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.card { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+.chip { display: inline-block; font-size: .78rem; padding: 2px 8px; border-radius: 999px; background: var(--green-soft); color: var(--green); font-weight: 600; }
+
+/* nav */
+.nav { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: var(--radius); padding: 10px 18px; }
+.btn.primary { background: var(--green); border-color: var(--green); color: #fff; }
+:root[data-theme="dark"] .btn.primary { color: #10160F; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn.primary { color: #10160F; } }
+.btn:disabled { opacity: .45; cursor: default; }
+.hint-keys { font-size: .85rem; color: var(--muted); }
+
+/* ---------- mock of the app ---------- */
+.app { border: 1px solid #CDD3C6; border-radius: 10px; overflow: hidden; background: var(--board); color: var(--board-ink); font-size: 12px; box-shadow: 0 1px 0 rgba(0,0,0,.03); }
+.app-head, .app-props, .app-tray, .app-status { background: var(--chrome); border-bottom: 1px solid var(--chrome-line); display: flex; align-items: center; gap: 4px; padding: 0 8px; flex-wrap: wrap; }
+.app-head { min-height: 38px; }
+.app-props { min-height: 32px; }
+.app-tray { border-top: 1px solid var(--chrome-line); border-bottom: 0; min-height: 40px; }
+.app-status { border-top: 1px solid var(--chrome-line); border-bottom: 0; min-height: 22px; font-size: 10px; color: #7D8A75; }
+.app-body { display: flex; min-height: 220px; }
+.app-rail { width: 34px; background: #FAFBF8; border-right: 1px solid var(--chrome-line); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; }
+.grid-paper { background-color: var(--board); background-image: linear-gradient(var(--board-grid) 1px, transparent 1px), linear-gradient(90deg, var(--board-grid) 1px, transparent 1px); background-size: 22px 22px; }
+.app-canvas { flex: 1; position: relative; min-width: 0; }
+.hot { border: 0; background: transparent; padding: 4px 7px; border-radius: 5px; color: var(--board-ink); font-size: 12px; }
+.hot:hover, .hot.seen { background: #E6EDDF; }
+.hot.on { outline: 2px solid var(--gold); background: #F6EBD6; }
+.hot.solid { background: #58725B; color: #fff; }
+.tool { width: 26px; height: 26px; display: grid; place-items: center; font-size: 14px; padding: 0; }
+.app-title { font-weight: 600; margin-right: 10px; }
+.spacer { flex: 1; }
+.explain { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; min-height: 120px; display: flex; flex-direction: column; gap: 6px; }
+
+/* practice boards */
+.board { position: relative; border: 1px solid #CDD3C6; border-radius: 10px; overflow: hidden; touch-action: none; user-select: none; color: var(--board-ink); }
+.board.tall { height: 340px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 6px; }
+.tb { border: 1px solid var(--line); background: var(--surface); border-radius: 7px; padding: 6px 11px; font-size: .9rem; }
+.tb.on { background: var(--green); color: #fff; border-color: var(--green); }
+:root[data-theme="dark"] .tb.on { color: #10160F; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tb.on { color: #10160F; } }
+.caption { position: absolute; font-size: 22px; line-height: 1.35; white-space: pre-wrap; color: var(--board-ink); font-family: "Segoe UI", var(--body); }
+.board textarea { position: absolute; font: 22px/1.35 "Segoe UI", var(--body); color: var(--board-ink); background: rgba(255,255,255,.85); border: 1px solid #9BAF94; outline: none; resize: none; padding: 0 2px; min-width: 220px; overflow: hidden; }
+
+/* timeline */
+.tl-box { border: 1px solid #CDD3C6; border-radius: 10px; overflow-x: auto; background: var(--board); }
+.tl { position: relative; height: 260px; min-width: 640px; color: var(--board-ink); }
+.tl-axis { position: absolute; left: 18px; right: 18px; height: 3px; background: var(--board-ink); }
+.tl-axis::after { content: ""; position: absolute; right: -10px; top: -6px; border: 7.5px solid transparent; border-left: 12px solid var(--board-ink); border-right: 0; }
+.tl-dot { position: absolute; width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 3px solid var(--board-ink); transform: translate(-50%, -50%); }
+.tl-date { position: absolute; font-weight: 700; font-size: 14px; white-space: nowrap; transform: translateX(-50%); }
+.tl-title { position: absolute; font-size: 12px; text-align: center; transform: translateX(-50%); line-height: 1.3; }
+.tl-stem { position: absolute; width: 0; border-left: 1px dotted var(--board-ink); }
+textarea.code { width: 100%; min-height: 150px; font: 14px/1.5 var(--body); padding: 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); resize: vertical; }
+
+/* frames stage */
+.stage { position: relative; height: 330px; overflow: hidden; border: 1px solid #CDD3C6; border-radius: 10px; background: var(--board); cursor: grab; touch-action: none; }
+.stage.dragging { cursor: grabbing; }
+.world { position: absolute; left: 0; top: 0; width: 1800px; height: 1200px; transform-origin: 0 0; transition: transform .45s cubic-bezier(.2,.7,.2,1); }
+.world.instant { transition: none; }
+.area { position: absolute; width: 760px; height: 430px; padding: 34px 40px; color: var(--board-ink); }
+.area h4 { font-family: var(--display); font-size: 46px; margin: 0 0 14px; }
+.area p { font-size: 24px; max-width: none; }
+.frame-outline { position: absolute; border: 3px dashed #A7B39C; pointer-events: none; }
+.frame-outline span { position: absolute; left: -3px; top: -30px; background: #58725B; color: #fff; font: 600 16px var(--body); padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+.tray { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.frame-chip { border: 1px solid var(--line); background: var(--surface); border-radius: 7px; padding: 5px 10px; font-size: .88rem; }
+.frame-chip.on { border-color: var(--green); background: var(--green-soft); }
+.show-overlay { position: absolute; inset: 0; background: var(--board); z-index: 5; display: flex; flex-direction: column; }
+.show-overlay .stage { border: 0; border-radius: 0; height: auto; flex: 1; cursor: default; }
+.show-bar { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); background: rgba(255,255,255,.95); border: 1px solid #DFE5D9; border-radius: 9px; padding: 4px 8px; display: flex; gap: 6px; align-items: center; color: #26352F; font-size: .9rem; z-index: 6; white-space: nowrap; }
+.show-bar button { border: 0; background: transparent; padding: 4px 10px; color: #26352F; }
+.frames-wrap { position: relative; }
+
+/* covers & steps */
+.qa { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 10px 16px; align-items: center; padding: 16px; color: var(--board-ink); font-size: 17px; }
+.answer { position: relative; font-weight: 600; color: #58725B; padding: 6px 10px; }
+.cover { position: absolute; inset: 0; border-radius: 8px; background: #58725B; color: #fff; display: grid; place-items: center; font: 700 20px var(--body); border: 0; transition: opacity .25s; }
+.board.editor .cover { opacity: .78; outline: 2px dashed #fff; outline-offset: -4px; pointer-events: none; }
+.cover.open { opacity: 0; }
+.step-item { font-size: 19px; padding: 6px 0; transition: opacity .3s, transform .3s; }
+.step-item.hidden { opacity: 0; transform: translateY(6px); }
+.board.editor .step-item.hidden { opacity: .45; transform: none; }
+.badge { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #D69A38; color: #fff; font-size: 12px; font-weight: 700; margin-right: 8px; }
+.board:not(.editor) .badge { display: none; }
+.switch { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.switch button { border: 0; background: var(--surface); padding: 7px 14px; }
+.switch button.on { background: var(--green); color: #fff; }
+
+/* show tools */
+.tools-area { position: relative; height: 300px; overflow: hidden; border: 1px solid #CDD3C6; border-radius: 10px; cursor: default; }
+.tools-area.no-cursor { cursor: none; }
+.laser { position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #E0362F; border: 2px solid #fff; box-shadow: 0 0 0 8px rgba(224,54,47,.25), 0 0 0 16px rgba(224,54,47,.12); transform: translate(-50%, -50%); pointer-events: none; }
+.spot { position: absolute; inset: 0; pointer-events: none; }
+.curtain { position: absolute; left: 0; right: 0; bottom: 0; background: #26352F; cursor: ns-resize; }
+.curtain::before { content: ""; position: absolute; left: 50%; top: 10px; width: 90px; height: 7px; margin-left: -45px; border-radius: 4px; background: rgba(255,255,255,.5); }
+
+/* timer */
+.timer { width: min(320px, 100%); border: 1px solid #C9D3C0; border-radius: 12px; background: #FFFFFF; color: #26352F; padding: 12px 16px 14px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.timer-time { font: 600 64px/1 "Segoe UI", var(--body); font-variant-numeric: tabular-nums; }
+.timer-time.warn { color: #C94F49; }
+.timer-time.blink { animation: blink .5s steps(2) 6; }
+@keyframes blink { 50% { opacity: .3; } }
+.timer-row { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.timer-row button { min-width: 44px; padding: 7px 10px; border: 1px solid #DCE3D4; border-radius: 7px; background: #F7F9F4; color: #26352F; font-size: 16px; }
+
+/* scenarios, keys, quiz */
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tab { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 7px 16px; }
+.tab.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.recipe { display: flex; flex-direction: column; gap: 10px; }
+.recipe label { display: flex; gap: 10px; align-items: baseline; }
+.recipe input { accent-color: var(--green); width: 18px; height: 18px; flex: none; transform: translateY(3px); }
+.keys-box { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+td, th { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+input.search { width: 100%; max-width: 360px; padding: 9px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); font: inherit; }
+.q { display: flex; flex-direction: column; gap: 8px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.opts { display: flex; flex-direction: column; gap: 6px; }
+.opt { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: var(--radius); padding: 9px 12px; }
+.opt.right { border-color: var(--green); background: var(--green-soft); }
+.opt.wrong { border-color: var(--red); background: color-mix(in srgb, var(--red) 12%, transparent); }
+.feedback { font-size: .92rem; color: var(--muted); }
+.score { font-family: var(--display); font-size: 1.4rem; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><div class="brand-mark" aria-hidden="true">Д</div><span>Доска истории · учебник</span></div>
+    <div class="progress"><div class="bar" aria-hidden="true"><i id="bar"></i></div><span class="counter" id="counter">1 / 16</span></div>
+    <button class="toc-toggle" id="tocToggle" aria-expanded="false" aria-controls="toc">Содержание</button>
+  </header>
+  <nav class="toc" id="toc" hidden aria-label="Содержание"></nav>
+
+  <main id="slides">
+
+  <!-- 1 -->
+  <section class="slide" data-id="start" data-title="Знакомство">
+    <div class="slide-head">
+      <span class="eyebrow">Учебник для учителя · 15 минут</span>
+      <h1>Как вести урок истории на «Доске истории»</h1>
+    </div>
+    <div class="cols">
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <p>«Доска истории» — бесплатная программа для Windows. На бесконечной доске можно разложить карты, надписи, ленты времени и вопросы, а потом показать их классу как презентацию.</p>
+        <p>Учебник проведёт вас по основным функциям. На большинстве слайдов есть площадка для пробы: щёлкайте, пишите и рисуйте прямо здесь, в браузере. Программу для этого открывать не нужно.</p>
+        <p class="muted">Листайте кнопками внизу или клавишами <kbd>←</kbd> <kbd>→</kbd>. Пройденные слайды отмечаются в «Содержании».</p>
+      </div>
+      <div class="cards">
+        <div class="card"><span class="chip">Подготовка</span><h3>Собрать урок</h3><p class="muted">Карты, PDF, надписи, фигуры, лента времени.</p></div>
+        <div class="card"><span class="chip">Показ</span><h3>Провести урок</h3><p class="muted">Кадры вместо слайдов, указка, прожектор, шторка.</p></div>
+        <div class="card"><span class="chip">Проверка</span><h3>Спросить класс</h3><p class="muted">Плашки с ответами, появление по шагам, таймер.</p></div>
+        <div class="card"><span class="chip">Без интернета</span><h3>Работает везде</h3><p class="muted">Без регистрации. Урок хранится в одном файле .hboard.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide" data-id="install" data-title="Установка">
+    <div class="slide-head"><span class="eyebrow">Шаг 1</span><h2>Установите программу</h2></div>
+    <div class="cols">
+      <ol class="steps">
+        <li>Откройте страницу релизов: <a href="https://github.com/kuzmin-lemmi/history-board/releases/latest">github.com/kuzmin-lemmi/history-board</a>.</li>
+        <li>Скачайте файл <b>HistoryBoard-Setup-win-x64.exe</b>.</li>
+        <li>Откройте его и нажмите <b>«Установить и открыть»</b>. Права администратора не нужны, .NET уже внутри.</li>
+        <li>Программа появится в меню «Пуск» и, если оставить галочку, на рабочем столе.</li>
+      </ol>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="note"><b>Windows может предупредить:</b> «Windows защитила ваш компьютер». Так система реагирует на новые неподписанные программы, угрозы она не нашла. Нажмите «Подробнее» → «Выполнить в любом случае».</div>
+        <div class="note"><b>Школьный компьютер не даёт запускать?</b> Передайте администратору памятку <a href="https://github.com/kuzmin-lemmi/history-board/blob/main/docs/ADMIN.md">ADMIN.md</a>. В ней описано, как установить программу для всех пользователей.</div>
+        <p class="muted">Обновления приходят сами: когда выходит новая версия, кнопка <b>↻</b> наверху окна меняется на «↻ Новая».</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide" data-id="interface" data-title="Окно программы">
+    <div class="slide-head"><span class="eyebrow">Шаг 2 · попробуйте</span><h2>Что где находится</h2><p class="muted">Щёлкайте по кнопкам макета окна — справа появится объяснение. Осмотрено: <b id="seenCount">0</b> из <b id="seenTotal">0</b>.</p></div>
+    <div class="cols">
+      <div class="app" id="mock">
+        <div class="app-head">
+          <span class="app-title">Доска истории</span>
+          <button class="hot" data-tip="lesson">Новый урок</button>
+          <span class="spacer"></span>
+          <button class="hot" data-tip="library">Уроки</button>
+          <button class="hot" data-tip="add">＋ Добавить ▾</button>
+          <button class="hot" data-tip="timer">⏱ Таймер</button>
+          <button class="hot" data-tip="export">Экспорт ▾</button>
+          <button class="hot solid" data-tip="save">Сохранить</button>
+          <button class="hot" data-tip="show">▷ Показ</button>
+        </div>
+        <div class="app-props">
+          <button class="hot" data-tip="props">Шрифт − 32 +</button>
+          <button class="hot" data-tip="colors">● ● ● ●</button>
+          <span class="spacer"></span>
+          <button class="hot" data-tip="actions">Действия ▾</button>
+        </div>
+        <div class="app-body">
+          <div class="app-rail">
+            <button class="hot tool" data-tip="select" aria-label="Выбор">↖</button>
+            <button class="hot tool" data-tip="hand" aria-label="Рука">✥</button>
+            <button class="hot tool" data-tip="text" aria-label="Текст">Т</button>
+            <button class="hot tool" data-tip="draw" aria-label="Карандаш и маркер">✎</button>
+            <button class="hot tool" data-tip="shapes" aria-label="Фигуры">▭</button>
+            <button class="hot tool" data-tip="cover" aria-label="Плашка">▒</button>
+            <button class="hot tool" data-tip="eraser" aria-label="Ластик">⌫</button>
+          </div>
+          <div class="app-canvas grid-paper">
+            <button class="hot" data-tip="canvas" style="position:absolute;left:30px;top:30px;font:600 20px var(--display)">Бесконечное поле</button>
+            <button class="hot" data-tip="zoom" style="position:absolute;right:8px;bottom:8px;background:#fff;border:1px solid #E1E7DA">− 100% + Всё</button>
+          </div>
+        </div>
+        <div class="app-tray">
+          <button class="hot" data-tip="frames">＋ Кадр</button>
+          <button class="hot" data-tip="frames">1 Титул</button>
+          <button class="hot" data-tip="frames">2 Карта</button>
+          <span class="spacer"></span>
+          <button class="hot" data-tip="show">▷ Показ</button>
+        </div>
+        <div class="app-status"><button class="hot" data-tip="status" style="font-size:10px;padding:2px 4px">● Автосохранено на компьютере · подсказки к инструменту</button></div>
+      </div>
+      <div class="explain" id="explain" aria-live="polite">
+        <h3>Выберите любую кнопку слева</h3>
+        <p class="muted">Начните с «＋ Добавить» и «▷ Показ» — это две главные кнопки урока.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide" data-id="text" data-title="Надписи">
+    <div class="slide-head"><span class="eyebrow">Шаг 3 · попробуйте</span><h2>Надписи: щёлкнул и пишешь</h2></div>
+    <div class="cols">
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <p>Инструмент <b>«Текст» (T)</b>: щёлкните по доске и пишите. <kbd>Enter</kbd> завершает надпись, <kbd>Shift</kbd>+<kbd>Enter</kbd> начинает новую строку.</p>
+        <p class="muted">В инструменте «Список» (L) <kbd>Enter</kbd> добавляет следующий пункт, а <kbd>Enter</kbd> на пустом пункте завершает список. Двойной щелчок по надписи открывает её для правки, колёсико мыши меняет размер шрифта.</p>
+        <span class="tasks-title">Задание</span>
+        <ul class="tasks" id="textTasks">
+          <li data-task="place">Щёлкните по доске справа и напишите «Петр I»</li>
+          <li data-task="multiline">Добавьте вторую строку «1682–1725» через Shift+Enter</li>
+          <li data-task="commit">Завершите надпись клавишей Enter</li>
+        </ul>
+      </div>
+      <div class="board tall grid-paper" id="textBoard" aria-label="Доска для пробы надписей"></div>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide" data-id="add" data-title="Карты, PDF, снимки">
+    <div class="slide-head"><span class="eyebrow">Шаг 4</span><h2>Карты, страницы учебника и снимки экрана</h2></div>
+    <p>Всё, что можно положить на доску, собрано в кнопке <b>«＋ Добавить»</b>. Добавленное хранится внутри файла урока, поэтому исходные картинки потом не нужны.</p>
+    <div class="cards">
+      <div class="card"><span class="chip">Ctrl+M</span><h3>Карта или изображение</h3><p class="muted">PNG, JPG, BMP, TIFF. Можно просто перетащить файл в окно или вставить картинку из браузера через <kbd>Ctrl</kbd>+<kbd>V</kbd>. Карта ложится за надписи.</p></div>
+      <div class="card"><span class="chip">PDF</span><h3>Страницы PDF</h3><p class="muted">Учебник, документ, рабочий лист. Программа спросит, какие страницы взять, например «1-3, 5», и разложит их рядом. Пишите и рисуйте поверх.</p></div>
+      <div class="card"><span class="chip">Ctrl+Shift+M</span><h3>Снимок области экрана</h3><p class="muted">Откроются системные «Ножницы». Выделите часть сайта или презентации — снимок сразу окажется на доске.</p></div>
+      <div class="card"><span class="chip">Ctrl+T</span><h3>Лента времени</h3><p class="muted">Строки «дата — событие» превращаются в ось с отметками. Попробуете через два слайда.</p></div>
+    </div>
+    <div class="note">У выделенной карты появляются кнопки <b>«Кадрировать»</b> (оставить нужную часть) и <b>«Повернуть ↻»</b>. Кнопка <b>«Закрепить»</b> (<kbd>Ctrl</kbd>+<kbd>L</kbd>) защищает карту от случайного сдвига, а рисовать поверх закреплённой карты можно.</div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide" data-id="draw" data-title="Фигуры и маркер">
+    <div class="slide-head"><span class="eyebrow">Шаг 5 · попробуйте</span><h2>Обвести, выделить, показать направление</h2></div>
+    <div class="cols">
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <p>Выберите инструмент и протяните мышью по схеме. Так на уроке обводят районы, выделяют реки и показывают направления походов.</p>
+        <div class="toolbar" id="drawTools" role="toolbar" aria-label="Инструменты рисования">
+          <button class="tb on" data-tool="ellipse">◯ Овал (O)</button>
+          <button class="tb" data-tool="rect">▭ Прямоугольник (R)</button>
+          <button class="tb" data-tool="marker">▍ Маркер (M)</button>
+          <button class="tb" data-tool="arrow">↗ Стрелка (A)</button>
+          <button class="tb" data-tool="fill" aria-pressed="false">◧ Заливка</button>
+          <button class="tb" data-tool="clear">Очистить</button>
+        </div>
+        <span class="tasks-title">Задание</span>
+        <ul class="tasks" id="drawTasks">
+          <li data-task="ellipse">Обведите Москву овалом</li>
+          <li data-task="marker">Проведите маркером вдоль реки</li>
+          <li data-task="arrow">Покажите стрелкой путь от Смоленска к Москве</li>
+          <li data-task="fill">Нарисуйте прямоугольник с заливкой</li>
+        </ul>
+        <p class="muted">В программе контурная фигура выбирается за край, поэтому карта внутри обводки остаётся доступной. Выделенное можно тянуть за любое место пунктирной рамки.</p>
+      </div>
+      <div class="board tall grid-paper" id="drawBoard">
+        <svg id="drawSvg" width="100%" height="100%" viewBox="0 0 600 340" preserveAspectRatio="xMidYMid meet" aria-label="Схема для рисования">
+          <defs><marker id="head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#427CB3"/></marker></defs>
+          <path d="M40,60 C140,90 170,170 260,190 S420,250 560,230" fill="none" stroke="#9EC3CF" stroke-width="9" stroke-linecap="round"/>
+          <text x="420" y="270" fill="#5F8FA0" font-size="14" font-family="Segoe UI, sans-serif">р. Москва (схема)</text>
+          <g font-family="Segoe UI, sans-serif" font-size="16" fill="#26352F">
+            <circle cx="150" cy="120" r="6" fill="#26352F"/><text x="162" y="115">Смоленск</text>
+            <circle cx="470" cy="170" r="7" fill="#C94F49"/><text x="482" y="165" fill="#C94F49" font-weight="600">Москва</text>
+            <circle cx="330" cy="140" r="6" fill="#26352F"/><text x="342" y="135">Бородино</text>
+          </g>
+          <g id="drawLayer"></g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide" data-id="timeline" data-title="Лента времени">
+    <div class="slide-head"><span class="eyebrow">Шаг 6 · попробуйте</span><h2>Лента времени из обычных строк</h2></div>
+    <p>Каждое событие — отдельная строка «дата — событие». Даты с годом программа расставляет на оси в масштабе: и «753 до н. э.», и «XIX век», и «22 июня 1941». Близкие события уходят в соседний ряд подписей. Измените строки — лента перестроится.</p>
+    <div class="cols">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <label for="tlInput" class="tasks-title">События</label>
+        <textarea id="tlInput" class="code" spellcheck="false">1801 — Восшествие на престол Александра I
+1812 — Отечественная война
+1825 — Восстание декабристов
+1861 — Отмена крепостного права
+1905 — Первая русская революция</textarea>
+        <div class="toolbar">
+          <button class="tb" data-tl="rome">Пример: Древний Рим</button>
+          <button class="tb" data-tl="ww2">Пример: 1941–1945</button>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <span class="tasks-title" id="tlMode">Расстановка: по годам</span>
+        <div class="tl-box"><div class="tl" id="tl"></div></div>
+        <p class="muted">В программе: «＋ Добавить → Лента времени». Двойной щелчок по ленте меняет события, а уголок рамки выделения — длину оси.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide" data-id="frames" data-title="Кадры и показ">
+    <div class="slide-head"><span class="eyebrow">Шаг 7 · попробуйте</span><h2>Кадры — это слайды вашего урока</h2></div>
+    <div class="cols">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <p>Здесь нет отдельных слайдов: всё лежит на одной большой доске. <b>Кадр</b> запоминает участок доски и масштаб. В показе доска плавно перелетает от кадра к кадру.</p>
+        <ol class="steps">
+          <li>Наведите вид на материал: тащите доску мышью или нажмите кнопку участка.</li>
+          <li>Нажмите <b>«＋ Кадр»</b>. На доске появится рамка с номером — то, что увидят ученики.</li>
+          <li>Повторите для следующих участков и нажмите <b>«▷ Показ»</b>.</li>
+        </ol>
+        <span class="tasks-title">Задание</span>
+        <ul class="tasks" id="frameTasks">
+          <li data-task="two">Сохраните хотя бы два кадра</li>
+          <li data-task="show">Запустите показ</li>
+          <li data-task="last">Дойдите до последнего кадра стрелкой →</li>
+        </ul>
+      </div>
+      <div class="frames-wrap" style="display:flex;flex-direction:column;gap:8px">
+        <div class="toolbar">
+          <button class="tb" data-go="0">Титул</button><button class="tb" data-go="1">Карта</button><button class="tb" data-go="2">Лента</button><button class="tb" data-go="3">Вопросы</button>
+          <button class="tb" id="zoomOut">−</button><button class="tb" id="zoomIn">+</button><button class="tb" id="fitAll">Всё</button>
+        </div>
+        <div class="stage" id="stage" aria-label="Доска с кадрами">
+          <div class="world" id="world">
+            <div class="area" style="left:0;top:0"><h4>Отечественная война 1812 года</h4><p>Вторжение Наполеона и его поражение</p></div>
+            <div class="area" style="left:960px;top:0"><h4>Схема похода</h4><svg width="680" height="280" viewBox="0 0 680 280"><path d="M20,200 L200,150 L360,170 L520,110 L650,80" stroke="#427CB3" stroke-width="8" fill="none" stroke-linecap="round"/><path d="M650,95 L480,190 L300,210 L120,230" stroke="#C94F49" stroke-width="7" fill="none" stroke-dasharray="14 10"/><circle cx="650" cy="80" r="12" fill="#C94F49"/><text x="560" y="60" font-size="26" fill="#C94F49" font-family="Segoe UI, sans-serif">Москва</text></svg></div>
+            <div class="area" style="left:0;top:660px"><h4>Ход войны</h4><svg width="680" height="200" viewBox="0 0 680 200" font-family="Segoe UI, sans-serif"><line x1="10" y1="100" x2="660" y2="100" stroke="#26352F" stroke-width="4"/><g fill="#fff" stroke="#26352F" stroke-width="4"><circle cx="60" cy="100" r="9"/><circle cx="300" cy="100" r="9"/><circle cx="420" cy="100" r="9"/><circle cx="620" cy="100" r="9"/></g><g font-size="22" font-weight="700" fill="#26352F" text-anchor="middle"><text x="60" y="80">июнь</text><text x="300" y="80">26 августа</text><text x="420" y="80">сентябрь</text><text x="620" y="80">декабрь</text></g><g font-size="18" fill="#26352F" text-anchor="middle"><text x="60" y="140">вторжение</text><text x="300" y="140">Бородино</text><text x="420" y="140">Москва</text><text x="620" y="140">изгнание</text></g></svg></div>
+            <div class="area" style="left:960px;top:660px"><h4>Проверь себя</h4><p>Кто командовал русской армией при Бородине?</p><p style="margin-top:14px">Где решили оставить Москву?</p></div>
+            <div id="outlines"></div>
+          </div>
+        </div>
+        <div class="tray"><button class="tb" id="addFrame">＋ Кадр</button><span id="frameChips" class="tray"></span><span class="spacer"></span><button class="tb on" id="startShow">▷ Показ</button></div>
+        <div class="show-overlay" id="showOverlay" hidden>
+          <div class="stage" id="showStage"><div class="world" id="showWorld"></div></div>
+          <div class="show-bar"><button id="showPrev" aria-label="Предыдущий кадр">←</button><span id="showLabel">1 / 1</span><button id="showNext" aria-label="Следующий кадр">→</button><button id="showEnd">Завершить · Esc</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide" data-id="covers" data-title="Плашки и шаги">
+    <div class="slide-head"><span class="eyebrow">Шаг 8 · попробуйте</span><h2>Спрятать ответ и открыть его в нужный момент</h2></div>
+    <div class="switch" role="group" aria-label="Режим"><button id="modeEditor">Редактор</button><button id="modeShow" class="on">Показ</button></div>
+    <div class="cols">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <h3>Плашки «открыть щелчком»</h3>
+        <p class="muted">Инструмент «Плашка» (K) или «Действия → Закрыть плашкой» (<kbd>Ctrl</kbd>+<kbd>H</kbd>) закрывает дату, слово или часть карты. В показе плашку открывает щелчок, повторный щелчок закрывает. Открывать можно в любом порядке.</p>
+        <div class="board grid-paper" id="coverBoard">
+          <div class="qa">
+            <span>Год Бородинского сражения?</span><span class="answer">1812<button class="cover" aria-label="Открыть ответ">?</button></span>
+            <span>Кто командовал русской армией?</span><span class="answer">М. И. Кутузов<button class="cover" aria-label="Открыть ответ">?</button></span>
+            <span>Где решили оставить Москву?</span><span class="answer">Совет в Филях<button class="cover" aria-label="Открыть ответ">?</button></span>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <h3>Появление по шагам</h3>
+        <p class="muted">«Действия → Появление в показе → Шаг 1, 2, 3…». В показе каждое <kbd>→</kbd> или пробел открывает следующий шаг, и только после последнего доска переходит к следующему кадру.</p>
+        <div class="board grid-paper" id="stepBoard" style="padding:14px 18px">
+          <div class="step-item hidden"><span class="badge">1</span>Кризис III века</div>
+          <div class="step-item hidden"><span class="badge">2</span>Великое переселение народов</div>
+          <div class="step-item hidden"><span class="badge">3</span>Разделение империи в 395 году</div>
+        </div>
+        <div class="toolbar"><button class="tb" id="stepBack">←</button><button class="tb on" id="stepNext">→ Следующий шаг</button><span class="counter" id="stepCount">0 из 3</span></div>
+      </div>
+    </div>
+    <p class="muted">В редакторе плашки полупрозрачные: учитель видит, что под ними. В PDF и PNG они печатаются закрытыми — получается готовый рабочий лист.</p>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide" data-id="showtools" data-title="Указка, прожектор, шторка">
+    <div class="slide-head"><span class="eyebrow">Шаг 9 · попробуйте</span><h2>Направить внимание класса</h2></div>
+    <div class="toolbar" id="showTools">
+      <button class="tb" data-mode="pointer">● Указка (P)</button>
+      <button class="tb on" data-mode="spot">◎ Прожектор (S)</button>
+      <button class="tb" data-mode="curtain">▤ Шторка (B)</button>
+      <button class="tb" data-mode="none">Выключить</button>
+    </div>
+    <div class="tools-area grid-paper" id="toolsArea">
+      <div style="padding:22px 28px;color:#26352F">
+        <div style="font:700 30px var(--display);margin-bottom:10px">Реформы Петра I</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;font-size:17px">
+          <div><b>1700–1721</b><br>Северная война</div>
+          <div><b>1703</b><br>Основание Петербурга</div>
+          <div><b>1711</b><br>Учреждение Сената</div>
+          <div><b>1722</b><br>Табель о рангах</div>
+        </div>
+        <div style="margin-top:22px;font-size:17px">Вопрос классу: какая реформа изменила порядок продвижения по службе?</div>
+      </div>
+      <div class="spot" id="spot"></div>
+      <div class="laser" id="laser" hidden></div>
+      <div class="curtain" id="curtain" hidden></div>
+    </div>
+    <p class="muted" id="toolHint">Водите мышью над областью. Колёсико меняет размер прожектора, а шторку можно тянуть за край. В программе эти кнопки есть на панели показа. Esc сначала выключает инструмент, потом завершает показ.</p>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide" data-id="timer" data-title="Таймер">
+    <div class="slide-head"><span class="eyebrow">Шаг 10 · попробуйте</span><h2>Таймер на задание</h2></div>
+    <div class="cols">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <p>Кнопка <b>«⏱ Таймер»</b> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd>) показывает часы поверх доски, в том числе в показе. Их можно перетащить в любой угол.</p>
+        <ul class="steps">
+          <li><b>1, 3, 5, 10</b> — обратный отсчёт в минутах.</li>
+          <li><b>+1</b> — добавить минуту, если классу нужно чуть больше времени.</li>
+          <li><b>⏱</b> — секундомер: время идёт вверх.</li>
+          <li>Последние 10 секунд показаны красным, в конце звучит сигнал.</li>
+        </ul>
+        <p class="muted">Таймер не сохраняется в уроке: это инструмент для класса, а не часть материала.</p>
+      </div>
+      <div class="timer" id="timer">
+        <span class="tasks-title" style="color:#8A9581">Таймер</span>
+        <div class="timer-time" id="timerTime">05:00</div>
+        <div class="timer-row"><button data-min="1">1</button><button data-min="3">3</button><button data-min="5">5</button><button data-min="10">10</button><button id="tPlus">+1</button><button id="tWatch" aria-label="Секундомер">⏱</button></div>
+        <div class="timer-row"><button id="tToggle" aria-label="Пуск или пауза">▶</button><button id="tReset" aria-label="Сбросить">↺</button><button id="tDemo" title="Перемотать к последним секундам">−4:50</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide" data-id="save" data-title="Сохранение и экспорт">
+    <div class="slide-head"><span class="eyebrow">Шаг 11</span><h2>Сохранение, библиотека и раздаточный материал</h2></div>
+    <div class="cards">
+      <div class="card"><span class="chip">Ctrl+S</span><h3>Файл урока .hboard</h3><p class="muted">Карты, PDF, надписи, кадры и плашки хранятся в одном файле. Его можно переносить на флешке или отправить коллеге.</p></div>
+      <div class="card"><span class="chip">Само</span><h3>Автосохранение</h3><p class="muted">Доска сохраняется каждые секунды. Если закрыть программу без сохранения, она спросит, а при следующем запуске вернёт урок.</p></div>
+      <div class="card"><span class="chip">.bak</span><h3>Резервная копия</h3><p class="muted">Рядом с уроком лежит предыдущая версия «Урок.hboard.bak». Если файл повредится, программа сама предложит открыть копию.</p></div>
+      <div class="card"><span class="chip">Уроки</span><h3>Библиотека</h3><p class="muted">Последние уроки с миниатюрами и поиском. Там же три готовых примера: «Древний Рим», «1812 год», «Великая Отечественная война».</p></div>
+      <div class="card"><span class="chip">Экспорт</span><h3>PDF для печати</h3><p class="muted">«Экспорт → Все кадры в PDF» — каждый кадр на отдельной странице. Плашки печатаются закрытыми.</p></div>
+      <div class="card"><span class="chip">PNG</span><h3>Картинка</h3><p class="muted">Текущий вид, кадр или вся доска — для презентации, сайта или электронного журнала.</p></div>
+    </div>
+  </section>
+
+  <!-- 13 -->
+  <section class="slide" data-id="scenarios" data-title="Сценарии уроков">
+    <div class="slide-head"><span class="eyebrow">Шаг 12</span><h2>Три готовых сценария</h2><p class="muted">Отмечайте пункты, которые уже сделали в программе.</p></div>
+    <div class="tabs" role="tablist" id="scTabs">
+      <button class="tab on" data-sc="map" role="tab">Урок по карте</button>
+      <button class="tab" data-sc="check" role="tab">Проверка знаний</button>
+      <button class="tab" data-sc="doc" role="tab">Работа с документом</button>
+    </div>
+    <div class="recipe" data-sc-panel="map">
+      <label><input type="checkbox">«＋ Добавить → Карта»: положите историческую карту и нажмите «Закрепить» (<kbd>Ctrl</kbd>+<kbd>L</kbd>).</label>
+      <label><input type="checkbox">Подпишите города инструментом «Текст» или «Выноска» (B): выноска указывает на точку.</label>
+      <label><input type="checkbox">Обведите район овалом с «Заливкой», нарисуйте стрелки походов.</label>
+      <label><input type="checkbox">Стрелкам наступления дайте «Шаг 1», стрелкам отступления — «Шаг 2».</label>
+      <label><input type="checkbox">Сделайте кадры: вся карта, затем крупно ключевое место.</label>
+      <label><input type="checkbox">На уроке: <kbd>F5</kbd>, рассказ с указкой (P), стрелки по одной кнопкой <kbd>→</kbd>.</label>
+    </div>
+    <div class="recipe" data-sc-panel="check" hidden>
+      <label><input type="checkbox">Напишите вопросы слева, ответы справа.</label>
+      <label><input type="checkbox">Выделите ответы и закройте их: «Действия → Закрыть плашкой» (<kbd>Ctrl</kbd>+<kbd>H</kbd>).</label>
+      <label><input type="checkbox">Сделайте кадр с вопросами.</label>
+      <label><input type="checkbox">На уроке: «⏱ Таймер» на 3 минуты, затем открывайте ответы щелчком по плашкам.</label>
+      <label><input type="checkbox">Для раздачи: «Экспорт → Все кадры в PDF» — плашки напечатаются закрытыми.</label>
+    </div>
+    <div class="recipe" data-sc-panel="doc" hidden>
+      <label><input type="checkbox">«＋ Добавить → Страницы PDF»: выберите нужные страницы учебника или документа.</label>
+      <label><input type="checkbox">Выделите маркером (M) ключевые фразы источника.</label>
+      <label><input type="checkbox">Добавьте вопросы к документу выносками рядом со страницей.</label>
+      <label><input type="checkbox">Нужен фрагмент сайта? «＋ Добавить → Снимок области экрана».</label>
+      <label><input type="checkbox">На уроке: прожектор (S) — класс видит только обсуждаемую строку.</label>
+    </div>
+  </section>
+
+  <!-- 14 -->
+  <section class="slide" data-id="keys" data-title="Горячие клавиши">
+    <div class="slide-head"><span class="eyebrow">Шпаргалка</span><h2>Горячие клавиши</h2><p class="muted">Все сочетания можно поменять кнопкой ⚙ в программе.</p></div>
+    <label for="keySearch" class="tasks-title">Поиск</label>
+    <input id="keySearch" class="search" type="search" placeholder="например, кадр или плашка" autocomplete="off">
+    <div class="keys-box"><table><thead><tr><th>Действие</th><th>Клавиши</th></tr></thead><tbody id="keyRows"></tbody></table></div>
+  </section>
+
+  <!-- 15 -->
+  <section class="slide" data-id="quiz" data-title="Проверь себя">
+    <div class="slide-head"><span class="eyebrow">Шаг 13</span><h2>Проверь себя</h2></div>
+    <div id="quiz"></div>
+    <p class="score" id="score" aria-live="polite"></p>
+  </section>
+
+  <!-- 16 -->
+  <section class="slide" data-id="finish" data-title="Готово">
+    <div class="slide-head"><span class="eyebrow">Готово</span><h1>Можно вести урок</h1></div>
+    <div class="cols">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <p>Начните с готового примера: «Уроки → Примеры уроков». Нажмите <kbd>F5</kbd> и пройдите его как ученик, а потом поменяйте под свой класс.</p>
+        <p>Свой первый урок проще всего собрать за пять шагов: карта → подписи → плашки на ответы → два-три кадра → показ.</p>
+        <p class="muted">Нашли ошибку или не хватает функции? Расскажите автору программы — так она становится удобнее для всех учителей.</p>
+      </div>
+      <div class="cards">
+        <a class="card" href="https://github.com/kuzmin-lemmi/history-board/releases/latest"><span class="chip">Скачать</span><h3>Последняя версия</h3><p class="muted">Установщик и три примера уроков.</p></a>
+        <a class="card" href="https://github.com/kuzmin-lemmi/history-board/blob/main/docs/ADMIN.md"><span class="chip">Для школы</span><h3>Памятка администратору</h3><p class="muted">Установка для всех пользователей.</p></a>
+      </div>
+    </div>
+    <div class="toolbar"><button class="tb" id="restart">Пройти учебник заново</button></div>
+  </section>
+
+  </main>
+
+  <footer class="nav">
+    <button class="btn" id="prev">← Назад</button>
+    <span class="hint-keys">Клавиши <kbd>←</kbd> <kbd>→</kbd></span>
+    <button class="btn primary" id="next">Дальше →</button>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem("hb-tutorial-" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem("hb-tutorial-" + k, JSON.stringify(v)); } catch { /* storage is optional */ } }
+  };
+
+  /* ---------- slides ---------- */
+  const slides = $$(".slide");
+  const done = new Set(store.get("done", []));
+  let index = 0;
+  const toc = $("#toc");
+  slides.forEach((s, i) => {
+    const b = document.createElement("button");
+    b.innerHTML = `<b>${i + 1}</b><span>${s.dataset.title}</span>`;
+    b.addEventListener("click", () => { go(i); toc.hidden = true; $("#tocToggle").setAttribute("aria-expanded", "false"); });
+    toc.appendChild(b);
+  });
+  $("#tocToggle").addEventListener("click", () => { toc.hidden = !toc.hidden; $("#tocToggle").setAttribute("aria-expanded", String(!toc.hidden)); });
+
+  function go(i, fromHash) {
+    index = Math.max(0, Math.min(slides.length - 1, i));
+    slides.forEach((s, k) => s.hidden = k !== index);
+    done.add(slides[index].dataset.id); store.set("done", [...done]);
+    $("#counter").textContent = `${index + 1} / ${slides.length}`;
+    $("#bar").style.width = `${(index + 1) / slides.length * 100}%`;
+    $("#prev").disabled = index === 0;
+    $("#next").textContent = index === slides.length - 1 ? "К началу" : "Дальше →";
+    $$("button", toc).forEach((b, k) => { b.classList.toggle("current", k === index); b.classList.toggle("done", done.has(slides[k].dataset.id)); });
+    const id = "s-" + slides[index].dataset.id;
+    if (!fromHash && location.hash !== "#" + id) history.replaceState(null, "", "#" + id);
+    store.set("index", index);
+    slides[index].dispatchEvent(new Event("shown"));
+    if (!fromHash) window.scrollTo({ top: 0 });
+  }
+  function fromHash() { const id = location.hash.replace("#s-", ""); const i = slides.findIndex(s => s.dataset.id === id); return i; }
+  $("#prev").addEventListener("click", () => go(index - 1));
+  $("#next").addEventListener("click", () => go(index === slides.length - 1 ? 0 : index + 1));
+  $("#restart").addEventListener("click", () => go(0));
+  window.addEventListener("hashchange", () => { const i = fromHash(); if (i >= 0 && i !== index) go(i, true); });
+  document.addEventListener("keydown", e => {
+    const t = e.target; if (t.closest && t.closest("textarea, input")) return;
+    if (!$("#showOverlay").hidden) return;
+    if (slides[index].dataset.id === "covers" && (e.key === "ArrowRight" || e.key === " ")) return;
+    if (e.key === "ArrowRight") { go(index + 1); e.preventDefault(); }
+    if (e.key === "ArrowLeft") { go(index - 1); e.preventDefault(); }
+  });
+
+  function tick(listId, task) { const li = $(`#${listId} [data-task="${task}"]`); if (li) li.classList.add("ok"); }
+
+  /* ---------- interface tour ---------- */
+  const tips = {
+    lesson: ["Название урока", "Щёлкните и переименуйте урок. Это же имя предлагается при сохранении файла."],
+    library: ["Уроки", "Библиотека последних уроков с миниатюрами и поиском. Здесь же три готовых примера, «Открыть файл…» и «Новый урок»."],
+    add: ["＋ Добавить", "Карта или изображение, страницы PDF, снимок области экрана и лента времени. Картинку можно и просто перетащить в окно."],
+    timer: ["⏱ Таймер", "Обратный отсчёт или секундомер поверх доски. Виден и в показе."],
+    export: ["Экспорт", "PNG текущего вида, кадра или всей доски и PDF из всех кадров для печати."],
+    save: ["Сохранить", "Ctrl+S: урок целиком в одном файле .hboard. Ctrl+Shift+S — сохранить копию."],
+    show: ["▷ Показ", "F5: панели прячутся, доска переходит от кадра к кадру. Стрелки, пробел или смахивание на сенсорной доске."],
+    props: ["Шрифт и толщина", "Размер текста или толщина линии выбранного инструмента. Колёсико мыши делает то же самое."],
+    colors: ["Цвета", "Шесть спокойных цветов. Щелчок перекрашивает выделенный объект."],
+    actions: ["Действия", "Копировать, дублировать, группировать, закрыть плашкой и задать шаг появления в показе."],
+    select: ["Выбор (V)", "Выделять, двигать и менять размер. Выделенное тянется за любое место рамки, Shift+щелчок добавляет объект."],
+    hand: ["Рука (H)", "Двигать доску. То же самое: пробел + мышь или средняя кнопка мыши."],
+    text: ["Текст (T)", "Щёлкнул и пишешь. Enter — готово, Shift+Enter — новая строка. Рядом — «Список» (L) и «Выноска» (B)."],
+    draw: ["Карандаш (P) и маркер (M)", "Карандаш рисует от руки, маркер проводит широкую полупрозрачную полосу поверх карты."],
+    shapes: ["Фигуры", "Прямоугольник (R), овал (O), стрелка (A). Shift — ровный квадрат, круг или угол 45°."],
+    cover: ["Плашка (K)", "Закрывает ответ. В показе открывается щелчком."],
+    eraser: ["Ластик (E)", "Удаляет пометку целиком. Карты и закреплённые объекты он не трогает."],
+    canvas: ["Бесконечное поле", "Доска не кончается: двигайтесь в любую сторону. Ctrl+колёсико — масштаб вокруг указателя."],
+    zoom: ["Масштаб", "Щелчок по проценту или Ctrl+1 возвращает обычные 100%. «Всё» показывает весь урок вместе с рамками кадров."],
+    frames: ["Кадры", "«＋ Кадр» запоминает текущий вид как слайд. Миниатюры внизу: щелчок — перейти, правая кнопка — порядок и удаление."],
+    status: ["Строка состояния", "Слева — что произошло (сохранено, вставлено), справа — подсказка к текущему инструменту."]
+  };
+  const hots = $$("#mock .hot"); const seen = new Set();
+  $("#seenTotal").textContent = Object.keys(tips).length;
+  hots.forEach(h => h.addEventListener("click", () => {
+    const [title, text] = tips[h.dataset.tip];
+    hots.forEach(x => x.classList.toggle("on", x.dataset.tip === h.dataset.tip));
+    h.classList.add("seen"); seen.add(h.dataset.tip); $("#seenCount").textContent = seen.size;
+    $("#explain").innerHTML = `<h3>${title}</h3><p>${text}</p>`;
+  }));
+
+  /* ---------- text practice ---------- */
+  const textBoard = $("#textBoard"); let editor = null;
+  textBoard.addEventListener("pointerdown", e => {
+    if (e.target.tagName === "TEXTAREA") return;
+    if (editor) { commit(); return; }
+    const r = textBoard.getBoundingClientRect();
+    editor = document.createElement("textarea");
+    editor.style.left = Math.min(e.clientX - r.left, r.width - 230) + "px"; editor.style.top = Math.min(e.clientY - r.top - 14, r.height - 70) + "px";
+    editor.rows = 1; editor.setAttribute("aria-label", "Надпись");
+    textBoard.appendChild(editor); setTimeout(() => editor && editor.focus(), 0);
+    editor.addEventListener("input", grow);
+    editor.addEventListener("keydown", ev => {
+      if (ev.key === "Enter" && ev.shiftKey) { setTimeout(() => { grow(); if (editor.value.includes("\n")) tick("textTasks", "multiline"); }, 0); return; }
+      if (ev.key === "Enter" || ev.key === "Escape") { ev.preventDefault(); commit(ev.key === "Enter"); }
+    });
+    e.preventDefault();
+  });
+  function grow() { editor.rows = editor.value.split("\n").length; if (/пет/i.test(editor.value)) tick("textTasks", "place"); }
+  function commit(byEnter) {
+    if (!editor) return;
+    const value = editor.value.replace(/\s+$/, "");
+    if (value) {
+      const c = document.createElement("div"); c.className = "caption"; c.textContent = value;
+      c.style.left = editor.style.left; c.style.top = editor.style.top; textBoard.appendChild(c);
+      if (/пет/i.test(value)) tick("textTasks", "place");
+      if (value.includes("\n")) tick("textTasks", "multiline");
+      if (byEnter) tick("textTasks", "commit");
+    }
+    editor.remove(); editor = null;
+  }
+
+  /* ---------- drawing ---------- */
+  const svg = $("#drawSvg"), layer = $("#drawLayer"); let tool = "ellipse", fill = false, shape = null, start = null;
+  const NS = "http://www.w3.org/2000/svg";
+  $$("#drawTools .tb").forEach(b => b.addEventListener("click", () => {
+    const t = b.dataset.tool;
+    if (t === "clear") { layer.innerHTML = ""; return; }
+    if (t === "fill") { fill = !fill; b.classList.toggle("on", fill); b.setAttribute("aria-pressed", String(fill)); return; }
+    tool = t; $$("#drawTools .tb").forEach(x => { if (x.dataset.tool !== "fill") x.classList.toggle("on", x === b); });
+  }));
+  function pt(e) { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); }
+  svg.addEventListener("pointerdown", e => {
+    start = pt(e); svg.setPointerCapture(e.pointerId);
+    if (tool === "ellipse") shape = el("ellipse", { cx: start.x, cy: start.y, rx: 1, ry: 1 });
+    else if (tool === "rect") shape = el("rect", { x: start.x, y: start.y, width: 1, height: 1, rx: 6 });
+    else if (tool === "arrow") shape = el("line", { x1: start.x, y1: start.y, x2: start.x, y2: start.y, "marker-end": "url(#head)", stroke: "#427CB3", "stroke-width": 5, "stroke-linecap": "round" });
+    else shape = el("polyline", { points: `${start.x},${start.y}`, fill: "none", stroke: "#D69A38", "stroke-opacity": .45, "stroke-width": 18, "stroke-linecap": "round", "stroke-linejoin": "round" });
+    if (tool === "ellipse" || tool === "rect") { shape.setAttribute("stroke", tool === "ellipse" ? "#C94F49" : "#5F895A"); shape.setAttribute("stroke-width", 4); shape.setAttribute("fill", fill ? (tool === "ellipse" ? "rgba(201,79,73,.25)" : "rgba(95,137,90,.25)") : "none"); }
+    layer.appendChild(shape);
+  });
+  svg.addEventListener("pointermove", e => {
+    if (!shape) return; const p = pt(e);
+    if (tool === "ellipse") { attr(shape, { cx: (start.x + p.x) / 2, cy: (start.y + p.y) / 2, rx: Math.abs(p.x - start.x) / 2, ry: Math.abs(p.y - start.y) / 2 }); }
+    else if (tool === "rect") { attr(shape, { x: Math.min(p.x, start.x), y: Math.min(p.y, start.y), width: Math.abs(p.x - start.x), height: Math.abs(p.y - start.y) }); }
+    else if (tool === "arrow") attr(shape, { x2: p.x, y2: p.y });
+    else shape.setAttribute("points", shape.getAttribute("points") + ` ${p.x},${p.y}`);
+  });
+  svg.addEventListener("pointerup", e => {
+    if (!shape) return; const p = pt(e); const size = Math.hypot(p.x - start.x, p.y - start.y);
+    if (size < 8) shape.remove();
+    else {
+      if (tool === "ellipse") { const cx = +shape.getAttribute("cx"), cy = +shape.getAttribute("cy"), rx = +shape.getAttribute("rx"), ry = +shape.getAttribute("ry"); if (((470 - cx) / rx) ** 2 + ((170 - cy) / ry) ** 2 <= 1) tick("drawTasks", "ellipse"); }
+      if (tool === "marker") tick("drawTasks", "marker");
+      if (tool === "arrow" && Math.hypot(start.x - 150, start.y - 120) < 70 && Math.hypot(p.x - 470, p.y - 170) < 70) tick("drawTasks", "arrow");
+      if (tool === "rect" && fill) tick("drawTasks", "fill");
+    }
+    shape = null;
+  });
+  function el(name, attrs) { const n = document.createElementNS(NS, name); attr(n, attrs); return n; }
+  function attr(n, attrs) { for (const k in attrs) n.setAttribute(k, attrs[k]); }
+
+  /* ---------- timeline (same rules as the program) ---------- */
+  const months = [["январ", 1], ["феврал", 2], ["март", 3], ["апрел", 4], ["мая", 5], ["май", 5], ["июн", 6], ["июл", 7], ["август", 8], ["сентябр", 9], ["октябр", 10], ["ноябр", 11], ["декабр", 12]];
+  function roman(t) { const v = { I: 1, V: 5, X: 10, L: 50, C: 100 }; let s = 0; for (let i = 0; i < t.length; i++) { const c = v[t[i]]; s += i + 1 < t.length && v[t[i + 1]] > c ? -c : c; } return s; }
+  function year(date) {
+    const bc = /до н|до р/i.test(date) || date.includes("BC");
+    let value = null;
+    const cm = date.match(/(?<![\p{L}\d])(\d{1,2}|[IVXLC]{1,6})\s*(-?й\s*)?(в\.|в(?![\p{L}])|век|вв)/iu);
+    if (cm) { const n = /\d/.test(cm[1][0]) ? +cm[1] : roman(cm[1].toUpperCase()); if (n > 0 && n <= 40) value = bc ? -(n - 1) * 100 - 50 : (n - 1) * 100 + 50; }
+    if (value == null) {
+      const nums = date.match(/\d{1,4}/g) || []; const y = nums.find(n => n.length >= 3) ?? nums[nums.length - 1];
+      if (y != null) {
+        value = +y;
+        if (!bc && y.length >= 3) { const lower = date.toLowerCase(); let best = -1, m = null; for (const [stem, num] of months) { const i = lower.indexOf(stem); if (i >= 0 && (best < 0 || i < best)) { best = i; m = num; } } if (m) { const day = nums.filter(n => n.length <= 2).map(Number).find(d => d >= 1 && d <= 31) || 1; value += (m - 1) / 12 + (day - 1) / 372; } }
+      }
+    }
+    return value != null && bc && value > 0 ? -value : value;
+  }
+  function parse(text) {
+    return text.split("\n").map(l => l.trim()).filter(Boolean).map(line => {
+      let date = line, title = "";
+      for (const sep of [" — ", " – ", " - ", "\t", ": "]) { const i = line.indexOf(sep); if (i > 0) { date = line.slice(0, i).trim(); title = line.slice(i + sep.length).trim(); break; } }
+      return { date, title, year: year(date) };
+    });
+  }
+  const measure = document.createElement("canvas").getContext("2d");
+  function width(text, font) { measure.font = font; return measure.measureText(text).width; }
+  function drawTimeline() {
+    const box = $("#tl"); const events = parse($("#tlInput").value);
+    const proportional = events.length >= 2 && events.every(e => e.year != null) && new Set(events.map(e => e.year)).size >= 2;
+    const list = proportional ? [...events].sort((a, b) => a.year - b.year) : events;
+    $("#tlMode").textContent = events.length === 0 ? "Добавьте строки «дата — событие»" : proportional ? "Расстановка: по годам, в масштабе" : "Расстановка: равномерно (не у всех дат есть год)";
+    const W = Math.max(640, box.parentElement.clientWidth), pad = 60, span = W - 2 * pad;
+    const min = proportional ? list[0].year : 0, max = proportional ? list[list.length - 1].year : 1;
+    const wrap = Math.max(90, Math.min(170, list.length > 1 ? span / (list.length - 1) * 1.7 : span));
+    const last = [-Infinity, -Infinity, -Infinity, -Infinity];
+    const placed = list.map((e, i) => {
+      const x = pad + (proportional ? (e.year - min) / (max - min) * span : list.length === 1 ? span / 2 : i * span / (list.length - 1));
+      const half = Math.max(width(e.date, "700 14px Segoe UI, sans-serif"), Math.min(wrap, width(e.title, "12px Segoe UI, sans-serif"))) / 2 + 6;
+      let row = last.findIndex(l => x - half >= l); if (row < 0) row = last.indexOf(Math.min(...last));
+      last[row] = x + half; return { e, x, row };
+    });
+    const rows = Math.max(1, ...placed.map(p => p.row + 1));
+    const axis = 26 + rows * 24, titleTop = axis + 18, titleRow = 44;
+    box.style.width = W + "px"; box.style.height = (titleTop + rows * titleRow + 10) + "px";
+    let html = `<div class="tl-axis" style="top:${axis - 1}px"></div>`;
+    for (const p of placed) {
+      const dateY = axis - 30 - p.row * 24, tY = titleTop + p.row * titleRow;
+      if (p.row > 0) html += `<div class="tl-stem" style="left:${p.x}px;top:${dateY + 20}px;height:${axis - dateY - 26}px"></div><div class="tl-stem" style="left:${p.x}px;top:${axis + 6}px;height:${tY - axis - 6}px"></div>`;
+      html += `<div class="tl-dot" style="left:${p.x}px;top:${axis + .5}px"></div><div class="tl-date" style="left:${p.x}px;top:${dateY}px">${esc(p.e.date)}</div>`;
+      if (p.e.title) html += `<div class="tl-title" style="left:${p.x}px;top:${tY}px;width:${wrap}px">${esc(p.e.title)}</div>`;
+    }
+    box.innerHTML = html;
+  }
+  function esc(s) { return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+  const tlExamples = {
+    rome: "753 до н. э. — Легендарное основание Рима\n509 до н. э. — Установление республики\n264 до н. э. — Начало Первой Пунической войны\n44 до н. э. — Убийство Гая Юлия Цезаря\n27 до н. э. — Октавиан получает титул Август\n395 — Разделение империи\n476 — Падение Западной Римской империи",
+    ww2: "22 июня 1941 — Нападение Германии на СССР\n8 сентября 1941 — Начало блокады Ленинграда\n5 декабря 1941 — Контрнаступление под Москвой\n19 ноября 1942 — Контрнаступление под Сталинградом\n5 июля 1943 — Начало Курской битвы\n27 января 1944 — Снятие блокады Ленинграда\n9 мая 1945 — День Победы"
+  };
+  $$("[data-tl]").forEach(b => b.addEventListener("click", () => { $("#tlInput").value = tlExamples[b.dataset.tl]; drawTimeline(); }));
+  $("#tlInput").addEventListener("input", drawTimeline);
+  $('[data-id="timeline"]').addEventListener("shown", drawTimeline);
+  window.addEventListener("resize", () => { if (slides[index].dataset.id === "timeline") drawTimeline(); });
+
+  /* ---------- frames ---------- */
+  const stage = $("#stage"), world = $("#world"), outlines = $("#outlines");
+  const areas = [[0, 0], [960, 0], [0, 660], [960, 660]].map(([x, y]) => ({ x: x - 20, y: y - 20, w: 800, h: 470 }));
+  let cam = { x: -20, y: -20, z: .5 }; const frames = []; let showAt = 0;
+  function viewSize() { return { w: stage.clientWidth, h: stage.clientHeight }; }
+  function fit(r, el = stage) { const w = el.clientWidth, h = el.clientHeight; const z = Math.min(w / r.w, h / r.h); return { z, x: r.x + r.w / 2 - w / (2 * z), y: r.y + r.h / 2 - h / (2 * z) }; }
+  function apply(target = world, c = cam) { target.style.transform = `scale(${c.z}) translate(${-c.x}px, ${-c.y}px)`; }
+  function setCam(c, instant) { cam = c; world.classList.toggle("instant", !!instant); apply(); }
+  function currentRect() { const { w, h } = viewSize(); return { x: cam.x, y: cam.y, w: w / cam.z, h: h / cam.z }; }
+  $$("[data-go]").forEach(b => b.addEventListener("click", () => setCam(fit(areas[+b.dataset.go]))));
+  $("#zoomIn").addEventListener("click", () => zoomBy(1.25)); $("#zoomOut").addEventListener("click", () => zoomBy(.8));
+  $("#fitAll").addEventListener("click", () => setCam(fit({ x: -60, y: -80, w: 1840, h: 1240 })));
+  function zoomBy(f) { const { w, h } = viewSize(); const cx = cam.x + w / (2 * cam.z), cy = cam.y + h / (2 * cam.z); const z = Math.max(.15, Math.min(2, cam.z * f)); setCam({ z, x: cx - w / (2 * z), y: cy - h / (2 * z) }); }
+  let drag = null;
+  stage.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY, cam: { ...cam } }; stage.setPointerCapture(e.pointerId); stage.classList.add("dragging"); });
+  stage.addEventListener("pointermove", e => { if (!drag) return; setCam({ z: drag.cam.z, x: drag.cam.x - (e.clientX - drag.x) / drag.cam.z, y: drag.cam.y - (e.clientY - drag.y) / drag.cam.z }, true); });
+  stage.addEventListener("pointerup", () => { drag = null; stage.classList.remove("dragging"); });
+  stage.addEventListener("wheel", e => { e.preventDefault(); zoomBy(e.deltaY < 0 ? 1.1 : .9); }, { passive: false });
+  $("#addFrame").addEventListener("click", () => { frames.push(currentRect()); renderFrames(); if (frames.length >= 2) tick("frameTasks", "two"); });
+  function renderFrames() {
+    outlines.innerHTML = frames.map((f, i) => `<div class="frame-outline" style="left:${f.x}px;top:${f.y}px;width:${f.w}px;height:${f.h}px"><span>${i + 1}  Кадр ${i + 1}</span></div>`).join("");
+    const chips = $("#frameChips"); chips.innerHTML = "";
+    frames.forEach((f, i) => { const b = document.createElement("button"); b.className = "frame-chip"; b.textContent = `${i + 1}  Кадр ${i + 1}`; b.addEventListener("click", () => setCam(fit(f))); chips.appendChild(b); });
+  }
+  $("#startShow").addEventListener("click", () => {
+    if (frames.length === 0) { frames.push(currentRect()); renderFrames(); }
+    $("#showOverlay").hidden = false; $("#showWorld").innerHTML = world.innerHTML; $("#showWorld").querySelector("#outlines")?.remove();
+    tick("frameTasks", "show"); showAt = 0; showFrame(true); $("#showNext").focus();
+  });
+  function showFrame(instant) {
+    const sw = $("#showWorld"); sw.classList.toggle("instant", !!instant);
+    apply(sw, fit(frames[showAt], $("#showStage")));
+    $("#showLabel").textContent = `${showAt + 1} / ${frames.length}`;
+    if (showAt === frames.length - 1 && frames.length >= 2) tick("frameTasks", "last");
+  }
+  $("#showNext").addEventListener("click", () => { if (showAt < frames.length - 1) { showAt++; showFrame(); } });
+  $("#showPrev").addEventListener("click", () => { if (showAt > 0) { showAt--; showFrame(); } });
+  $("#showEnd").addEventListener("click", endShow);
+  function endShow() { $("#showOverlay").hidden = true; $("#startShow").focus(); }
+  document.addEventListener("keydown", e => {
+    if ($("#showOverlay").hidden) return;
+    if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { $("#showNext").click(); e.preventDefault(); }
+    if (e.key === "ArrowLeft" || e.key === "PageUp") { $("#showPrev").click(); e.preventDefault(); }
+    if (e.key === "Escape") { endShow(); e.preventDefault(); }
+  });
+  $('[data-id="frames"]').addEventListener("shown", () => setCam(fit(areas[0]), true));
+
+  /* ---------- covers and steps ---------- */
+  const boards = [$("#coverBoard"), $("#stepBoard")];
+  function mode(show) { boards.forEach(b => b.classList.toggle("editor", !show)); $("#modeShow").classList.toggle("on", show); $("#modeEditor").classList.toggle("on", !show); }
+  $("#modeEditor").addEventListener("click", () => mode(false)); $("#modeShow").addEventListener("click", () => mode(true));
+  $$("#coverBoard .cover").forEach(c => c.addEventListener("click", () => { c.classList.toggle("open"); c.setAttribute("aria-label", c.classList.contains("open") ? "Закрыть ответ" : "Открыть ответ"); }));
+  let step = 0; const items = $$("#stepBoard .step-item");
+  function steps() { items.forEach((it, i) => it.classList.toggle("hidden", i >= step)); $("#stepCount").textContent = `${step} из ${items.length}`; }
+  $("#stepNext").addEventListener("click", () => { step = Math.min(items.length, step + 1); steps(); });
+  $("#stepBack").addEventListener("click", () => { step = Math.max(0, step - 1); steps(); });
+  document.addEventListener("keydown", e => {
+    if (slides[index].dataset.id !== "covers" || e.target.closest("textarea, input")) return;
+    if (e.key === "ArrowRight" || e.key === " ") { if (step < items.length) { step++; steps(); e.preventDefault(); } else if (e.key === "ArrowRight") go(index + 1); }
+  });
+
+  /* ---------- pointer, spotlight, curtain ---------- */
+  const area = $("#toolsArea"), spot = $("#spot"), laser = $("#laser"), curtain = $("#curtain");
+  let toolMode = "spot", radius = 110, mouse = null, curtainTop = 150, curtainDrag = false;
+  function setMode(m) {
+    toolMode = m; $$("#showTools .tb").forEach(b => b.classList.toggle("on", b.dataset.mode === m));
+    area.classList.toggle("no-cursor", m === "pointer" || m === "spot"); laser.hidden = m !== "pointer" || !mouse; curtain.hidden = m !== "curtain"; paint();
+  }
+  function paint() {
+    const p = mouse || { x: area.clientWidth / 2, y: area.clientHeight / 2 };
+    spot.style.background = toolMode === "spot" ? `radial-gradient(circle at ${p.x}px ${p.y}px, transparent ${radius}px, rgba(18,24,21,.82) ${radius + 1}px)` : "none";
+    if (mouse) { laser.style.left = mouse.x + "px"; laser.style.top = mouse.y + "px"; }
+    curtain.style.top = curtainTop + "px";
+  }
+  $$("#showTools .tb").forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
+  area.addEventListener("pointermove", e => { const r = area.getBoundingClientRect(); mouse = { x: e.clientX - r.left, y: e.clientY - r.top }; if (curtainDrag) curtainTop = Math.max(0, Math.min(area.clientHeight, mouse.y)); laser.hidden = toolMode !== "pointer"; paint(); });
+  area.addEventListener("pointerleave", () => { if (!curtainDrag) { mouse = null; laser.hidden = true; paint(); } });
+  curtain.addEventListener("pointerdown", e => { curtainDrag = true; area.setPointerCapture(e.pointerId); });
+  area.addEventListener("pointerup", () => curtainDrag = false);
+  area.addEventListener("wheel", e => {
+    if (toolMode === "spot") { radius = Math.max(50, Math.min(260, radius + (e.deltaY < 0 ? 15 : -15))); e.preventDefault(); paint(); }
+    else if (toolMode === "curtain") { curtainTop = Math.max(0, Math.min(area.clientHeight, curtainTop + (e.deltaY > 0 ? 25 : -25))); e.preventDefault(); paint(); }
+  }, { passive: false });
+  setMode("spot");
+
+  /* ---------- timer ---------- */
+  let duration = 300, elapsed = 0, startAt = null, up = false, finished = false, clock = null;
+  const tEl = $("#timerTime");
+  function now() { return elapsed + (startAt ? (Date.now() - startAt) / 1000 : 0); }
+  function render() {
+    let shown = up ? now() : duration - now();
+    if (!up && shown <= 0 && !finished && (startAt || elapsed > 0)) { finished = true; elapsed = duration; startAt = null; beep(); tEl.classList.remove("blink"); void tEl.offsetWidth; tEl.classList.add("blink"); }
+    if (finished) shown = 0;
+    const s = up ? Math.floor(shown) : Math.ceil(Math.max(0, shown));
+    tEl.textContent = `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+    tEl.classList.toggle("warn", !up && (finished || (shown <= 10 && now() > 0)));
+    $("#tToggle").textContent = startAt ? "⏸" : "▶";
+    if (!startAt) { clearInterval(clock); clock = null; }
+  }
+  function run() { if (!clock) clock = setInterval(render, 200); }
+  $$("[data-min]").forEach(b => b.addEventListener("click", () => { up = false; duration = +b.dataset.min * 60; elapsed = 0; finished = false; startAt = Date.now(); run(); render(); }));
+  $("#tPlus").addEventListener("click", () => { if (up) return; duration += 60; finished = false; render(); });
+  $("#tWatch").addEventListener("click", () => { up = true; elapsed = 0; finished = false; startAt = Date.now(); run(); render(); });
+  $("#tToggle").addEventListener("click", () => { if (startAt) { elapsed = now(); startAt = null; } else { if (finished) { elapsed = 0; finished = false; } startAt = Date.now(); run(); } render(); });
+  $("#tReset").addEventListener("click", () => { elapsed = 0; startAt = null; finished = false; render(); });
+  $("#tDemo").addEventListener("click", () => { if (up) return; if (!startAt) { startAt = Date.now(); run(); } elapsed = Math.max(elapsed, duration - 10); render(); });
+  let audio = null;
+  function beep() {
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      [0, .35, .7].forEach(t => { const o = audio.createOscillator(), g = audio.createGain(); o.frequency.value = 880; g.gain.setValueAtTime(.0001, audio.currentTime + t); g.gain.exponentialRampToValueAtTime(.25, audio.currentTime + t + .02); g.gain.exponentialRampToValueAtTime(.0001, audio.currentTime + t + .25); o.connect(g).connect(audio.destination); o.start(audio.currentTime + t); o.stop(audio.currentTime + t + .3); });
+    } catch { /* sound is optional */ }
+  }
+  render();
+
+  /* ---------- scenarios ---------- */
+  $$("#scTabs .tab").forEach(t => t.addEventListener("click", () => {
+    $$("#scTabs .tab").forEach(x => x.classList.toggle("on", x === t));
+    $$("[data-sc-panel]").forEach(p => p.hidden = p.dataset.scPanel !== t.dataset.sc);
+  }));
+  const checks = $$(".recipe input"); const saved = store.get("recipes", []);
+  checks.forEach((c, i) => { c.id = "recipe-" + i; c.checked = !!saved[i]; c.addEventListener("change", () => store.set("recipes", checks.map(x => x.checked))); });
+
+  /* ---------- shortcuts ---------- */
+  const keys = [
+    ["Сохранить урок", "Ctrl+S"], ["Сохранить копию", "Ctrl+Shift+S"], ["Открыть файл урока", "Ctrl+O"], ["Библиотека уроков", "Ctrl+Shift+O"], ["Новый урок", "Ctrl+N"],
+    ["Добавить карту или изображение", "Ctrl+M"], ["Снимок области экрана", "Ctrl+Shift+M"], ["Лента времени", "Ctrl+T"], ["Вставить картинку или объекты", "Ctrl+V"],
+    ["Отменить / повторить", "Ctrl+Z / Ctrl+Y"], ["Копировать / дублировать", "Ctrl+C / Ctrl+D"], ["Группировать / разгруппировать", "Ctrl+G / Ctrl+Shift+G"], ["Закрепить / открепить", "Ctrl+L"], ["Закрыть выделение плашкой", "Ctrl+H"], ["Удалить", "Delete"],
+    ["Выбор · Рука · Текст · Список", "V · H · T · L"], ["Карандаш · Маркер · Стрелка", "P · M · A"], ["Прямоугольник · Овал · Плашка · Выноска", "R · O · K · B"], ["Ластик", "E"],
+    ["Завершить надпись / новая строка", "Enter / Shift+Enter"], ["Двигать доску", "Пробел + мышь"], ["Масштаб вокруг указателя", "Ctrl + колёсико"], ["Обычный масштаб 100%", "Ctrl+1"], ["Показать всё", "Ctrl+0"],
+    ["Добавить кадр", "Ctrl+Enter"], ["Начать / завершить показ", "F5"], ["Следующий шаг или кадр в показе", "→ · Пробел · PageDown"], ["Указка · Прожектор · Шторка (в показе)", "P · S · B"], ["Таймер", "Ctrl+Shift+T"], ["Полный экран", "F11"], ["Завершить ввод или показ", "Esc"]
+  ];
+  function renderKeys() {
+    const q = $("#keySearch").value.trim().toLowerCase();
+    const rows = keys.filter(([a, k]) => !q || a.toLowerCase().includes(q) || k.toLowerCase().includes(q));
+    $("#keyRows").innerHTML = rows.length ? rows.map(([a, k]) => `<tr><td>${a}</td><td>${k.split(/( \/ | · )/).map(p => /^( \/ | · )$/.test(p) ? p : p.split("+").map(x => `<kbd>${esc(x.trim())}</kbd>`).join("+")).join("")}</td></tr>`).join("") : `<tr><td colspan="2" class="muted">Ничего не найдено. Попробуйте «кадр», «плашка» или «масштаб».</td></tr>`;
+  }
+  $("#keySearch").addEventListener("input", renderKeys); renderKeys();
+
+  /* ---------- quiz ---------- */
+  const quiz = [
+    ["Вы написали надпись. Как её завершить, а как начать новую строку?", ["Enter — новая строка, Ctrl+Enter — готово", "Enter — готово, Shift+Enter — новая строка", "Esc — новая строка, Enter — готово"], 1, "Enter завершает надпись, Shift+Enter переносит строку. Esc тоже завершает ввод."],
+    ["Что такое кадр?", ["Рамка вокруг картинки", "Сохранённый участок доски с масштабом — слайд показа", "Отдельный файл урока"], 1, "Кадр запоминает вид доски. В показе доска перелетает от кадра к кадру."],
+    ["Ответ на вопрос должен открыться щелчком, в любом порядке. Что поставить на ответ?", ["Шторку", "Шаг появления", "Плашку"], 2, "Плашка открывается щелчком в показе. Шаги появляются строго по порядку кнопкой →, а шторка закрывает весь низ экрана."],
+    ["Вы сильно увеличили доску. Как быстро вернуть обычный масштаб?", ["Ctrl+1 или щелчок по проценту масштаба", "Перезапустить программу", "Кнопка «Новый»"], 0, "Ctrl+1 или щелчок по проценту внизу справа возвращают 100%."],
+    ["Где взять готовый урок, чтобы посмотреть, как всё устроено?", ["В «Экспорт»", "В «Уроки» → «Примеры уроков»", "В настройках ⚙"], 1, "В библиотеке три примера: Древний Рим, 1812 год и Великая Отечественная война."],
+    ["Как положить на доску страницу учебника из PDF?", ["«＋ Добавить» → «Страницы PDF…»", "Только через снимок экрана", "Через «Экспорт»"], 0, "Программа спросит номера страниц и разложит их рядом. PDF можно и перетащить в окно."]
+  ];
+  const answers = store.get("quiz", {});
+  function renderQuiz() {
+    $("#quiz").innerHTML = quiz.map(([q, opts], qi) => `<div class="q"><b>${qi + 1}. ${q}</b><div class="opts">${opts.map((o, oi) => `<button class="opt" data-q="${qi}" data-o="${oi}">${o}</button>`).join("")}</div><div class="feedback" id="fb-${qi}"></div></div>`).join("");
+    $$(".opt").forEach(b => b.addEventListener("click", () => { answers[b.dataset.q] = +b.dataset.o; store.set("quiz", answers); mark(); }));
+    mark();
+  }
+  function mark() {
+    let right = 0, answered = 0;
+    quiz.forEach(([, , correct, why], qi) => {
+      const a = answers[qi]; if (a == null) return; answered++; if (a === correct) right++;
+      $$(`.opt[data-q="${qi}"]`).forEach(b => { const o = +b.dataset.o; b.classList.toggle("right", o === correct); b.classList.toggle("wrong", o === a && a !== correct); });
+      $(`#fb-${qi}`).textContent = (a === correct ? "Верно. " : "Не совсем. ") + why;
+    });
+    $("#score").textContent = answered === 0 ? "" : answered < quiz.length ? `Отвечено: ${answered} из ${quiz.length}` : right === quiz.length ? `Все ${quiz.length} ответов верны — можно вести урок.` : `Верно ${right} из ${quiz.length}. Загляните в слайды с ошибками.`;
+  }
+  renderQuiz();
+
+  /* ---------- start ---------- */
+  const h = fromHash();
+  go(h >= 0 ? h : Math.min(store.get("index", 0), slides.length - 1), h >= 0);
+})();
+</script>
+
+</body>
+</html>
