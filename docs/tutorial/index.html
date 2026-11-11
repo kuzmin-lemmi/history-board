@@ -820,8 +820,11 @@ input.search { width: 100%; max-width: 360px; padding: 9px 12px; border: 1px sol
     for (const p of placed) {
       const dateY = axis - 30 - p.row * 24, tY = titleTop + p.row * titleRow;
       if (p.row > 0) html += `<div class="tl-stem" style="left:${p.x}px;top:${dateY + 20}px;height:${axis - dateY - 26}px"></div><div class="tl-stem" style="left:${p.x}px;top:${axis + 6}px;height:${tY - axis - 6}px"></div>`;
-      html += `<div class="tl-dot" style="left:${p.x}px;top:${axis + .5}px"></div><div class="tl-date" style="left:${p.x}px;top:${dateY}px">${esc(p.e.date)}</div>`;
-      if (p.e.title) html += `<div class="tl-title" style="left:${p.x}px;top:${tY}px;width:${wrap}px">${esc(p.e.title)}</div>`;
+      // Labels stay inside the timeline even for the first and last events.
+      const dw = width(p.e.date, "700 14px Segoe UI, sans-serif") + 4;
+      const dateLeft = Math.max(0, Math.min(W - dw, p.x - dw / 2)), titleLeft = Math.max(0, Math.min(W - wrap, p.x - wrap / 2));
+      html += `<div class="tl-dot" style="left:${p.x}px;top:${axis + .5}px"></div><div class="tl-date" style="left:${dateLeft}px;top:${dateY}px;transform:none">${esc(p.e.date)}</div>`;
+      if (p.e.title) html += `<div class="tl-title" style="left:${titleLeft}px;top:${tY}px;width:${wrap}px;transform:none">${esc(p.e.title)}</div>`;
     }
     box.innerHTML = html;
   }
