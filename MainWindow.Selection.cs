@@ -57,6 +57,7 @@ public partial class MainWindow
         Add("Разгруппировать    " + shortcuts.Display(BoardCommand.Ungroup), () => GroupSelection(true), Surface.SelectedItems.Any(i => i.GroupId != null) && !Surface.SelectionLocked);
         Add("Выделить всё    " + shortcuts.Display(BoardCommand.SelectAll), () => { SetTool(BoardTool.Select); Surface.SelectMany(lesson.Items); UpdateUi(); });
         menu.Items.Add(new Separator());
+        Add("Закрыть плашкой    " + shortcuts.Display(BoardCommand.CoverSelection), () => CoverSelection(), count > 0);
         menu.Items.Add(StepsMenu());
         menu.PlacementTarget = (UIElement)sender; menu.IsOpen = true;
     }

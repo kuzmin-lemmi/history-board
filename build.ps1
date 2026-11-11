@@ -44,4 +44,9 @@ $digest = (Get-FileHash -LiteralPath $releaseInstaller -Algorithm SHA256).Hash.T
 Set-Content -LiteralPath ($releaseInstaller + '.sha256') -Value ($digest + '  HistoryBoard-Setup-win-x64.exe') -Encoding ascii
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'README.md') -Destination (Join-Path $releaseDirectory 'Как пользоваться.md') -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Assets\app.ico') -Destination (Join-Path $releaseDirectory 'Иконка программы.ico') -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'docs\ADMIN.md') -Destination (Join-Path $releaseDirectory 'Для администратора школы.md') -Force
+# Примеры уроков собираются самой программой из объектов доски.
+$examples = Join-Path $releaseDirectory 'Примеры уроков'
+$writer = Start-Process -FilePath $publishedExe -ArgumentList @('--write-examples', ('"' + $examples + '"')) -Wait -PassThru -WindowStyle Hidden
+if ($writer.ExitCode -ne 0 -or @(Get-ChildItem -LiteralPath $examples -Filter '*.hboard').Count -ne 3) { throw 'Не удалось подготовить примеры уроков.' }
 Write-Host "Готово: $releaseDirectory"

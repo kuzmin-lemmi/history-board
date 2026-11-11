@@ -124,7 +124,11 @@ public partial class MainWindow
 
     private void OnSurfaceMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (presenting) { BeginCurtainDrag(e); e.Handled = true; return; }
+        if (presenting)
+        {
+            if (!BeginCurtainDrag(e) && e.ChangedButton == MouseButton.Left) ToggleCoverAt(Surface.ScreenToWorld(e.GetPosition(Surface)));
+            e.Handled = true; return;
+        }
         if (e.ChangedButton == MouseButton.Middle || e.ChangedButton == MouseButton.Left && spaceHeld)
         { BeginPan(e.GetPosition(Viewport)); e.Handled = true; }
     }
@@ -289,6 +293,7 @@ public partial class MainWindow
         if (lesson.Frames.Count == 0) AddFrame();
         presenting = true; presentationWasFullscreen = fullscreen; revealStep = 0;
         Surface.Select(null); Surface.ShowStepBadges = false; Surface.ShowFrames = false; Surface.Redraw();
+        revealedCovers.Clear(); Surface.SetEditorLook(false);
         Overlay.Visibility = Visibility.Visible; Overlay.HasPointer = false; SetPresentationTool(PresentationTool.None);
         MainHeader.Visibility = PropertyBar.Visibility = ToolRail.Visibility = FramesTray.Visibility = StatusBar.Visibility = ZoomControls.Visibility = Visibility.Collapsed;
         ToolColumn.Width = new GridLength(0); PresentationControls.Visibility = Visibility.Visible;
@@ -299,7 +304,7 @@ public partial class MainWindow
     {
         if (!presenting) return;
         StopCameraAnimation(); SetPresentationTool(PresentationTool.None); EndCurtainDrag(); presenting = false;
-        Overlay.Visibility = Visibility.Collapsed; ShowAllSteps(); Surface.ShowStepBadges = true; Surface.ShowFrames = true; Surface.Redraw(); RestoreToolCursor();
+        Overlay.Visibility = Visibility.Collapsed; ShowAllSteps(); Surface.SetEditorLook(true); Surface.ShowStepBadges = true; Surface.ShowFrames = true; Surface.Redraw(); RestoreToolCursor();
         MainHeader.Visibility = PropertyBar.Visibility = ToolRail.Visibility = FramesTray.Visibility = StatusBar.Visibility = ZoomControls.Visibility = Visibility.Visible;
         ToolColumn.Width = new GridLength(48); PresentationControls.Visibility = Visibility.Collapsed;
         if (fullscreen != presentationWasFullscreen) ToggleFullscreen();

@@ -50,7 +50,7 @@ public partial class MainWindow : Window
         (BoardTool Tool, string Icon, string Label, string Shortcut)[] list =
         [ (BoardTool.Select, "↖", "Выбор", "V"), (BoardTool.Hand, "✥", "Рука — двигать доску", "H / Пробел"), (BoardTool.Text, "Т", "Текст", "T"), (BoardTool.List, "≡", "Список", "L"),
           (BoardTool.Callout, "❝", "Выноска", "B"), (BoardTool.Pen, "✎", "Карандаш", "P"), (BoardTool.Marker, "▍", "Маркер-выделитель", "M"), (BoardTool.Arrow, "↗", "Стрелка", "A"),
-          (BoardTool.Rectangle, "▭", "Прямоугольник", "R"), (BoardTool.Ellipse, "◯", "Овал", "O"), (BoardTool.Eraser, "⌫", "Ластик", "E") ];
+          (BoardTool.Rectangle, "▭", "Прямоугольник", "R"), (BoardTool.Ellipse, "◯", "Овал", "O"), (BoardTool.Cover, "▒", "Плашка «открыть щелчком»", "K"), (BoardTool.Eraser, "⌫", "Ластик", "E") ];
         foreach (var item in list)
         {
             var content = new StackPanel();
@@ -97,6 +97,7 @@ public partial class MainWindow : Window
             BoardTool.Marker => "Проведите полупрозрачную полосу поверх карты · Колёсико — ширина",
             BoardTool.Rectangle or BoardTool.Ellipse => "Протяните фигуру · Shift — квадрат/круг · «Заливка» — полупрозрачный цвет",
             BoardTool.Callout => "Нажмите на место, на которое указывает выноска, и протяните к месту подписи",
+            BoardTool.Cover => "Протяните плашку поверх ответа · В показе щелчок открывает и снова закрывает её",
             _ => "Тяните за любое место рамки выделения · Двойной клик — текст · Ctrl+1 — масштаб 100%"
         };
         UpdateProperties(); UpdateUi(); Surface.Focus();
@@ -134,7 +135,7 @@ public partial class MainWindow : Window
     {
         var selected = Surface.Selected;
         SelectedLabel.Text = Surface.SelectedItems.Count > 1 ? $"Выбрано: {Surface.SelectedItems.Count}" : selected == null ? "" : selected.Locked ? "Объект закреплён" : selected.Kind switch
-        { "image" => "Карта", "text" => "Надпись", "callout" => "Выноска", "timeline" => "Лента времени", "rect" => "Прямоугольник", "ellipse" => "Овал", "marker" => "Выделение маркером", _ => "Пометка" };
+        { "image" => "Карта", "text" => "Надпись", "callout" => "Выноска", "timeline" => "Лента времени", "rect" => "Прямоугольник", "ellipse" => "Овал", "cover" => "Плашка", "marker" => "Выделение маркером", _ => "Пометка" };
         if (selected != null && Surface.SelectedItems.Count == 1 && selected.Step > 0) SelectedLabel.Text += $" · шаг {selected.Step}";
         LockButton.IsEnabled = selected != null;
         LockButton.Content = Surface.SelectionLocked ? "Открепить" : "Закрепить";
@@ -185,6 +186,12 @@ public partial class MainWindow : Window
         {
             Surface.Select(null);
             draft = new BoardItem { Kind = tool switch { BoardTool.Pen => "pen", BoardTool.Marker => "marker", _ => "arrow" }, Color = color, Size = tool == BoardTool.Marker ? MarkerSize : strokeSize, Points = [new(point.X, point.Y)] };
+            Surface.Preview(draft);
+        }
+        else if (tool == BoardTool.Cover)
+        {
+            Surface.Select(null);
+            draft = new BoardItem { Kind = "cover", X = point.X, Y = point.Y, Width = 1, Height = 1, Color = CoverColor, Size = 4 };
             Surface.Preview(draft);
         }
         else if (tool is BoardTool.Rectangle or BoardTool.Ellipse)
@@ -252,7 +259,7 @@ public partial class MainWindow : Window
         }
         if (draft != null)
         {
-            if (draft.Kind is "rect" or "ellipse")
+            if (draft.Kind is "rect" or "ellipse" or "cover")
             {
                 var shape = ShapeRect(gestureStart, point, Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
                 draft.X = shape.X; draft.Y = shape.Y; draft.Width = Math.Max(1, shape.Width); draft.Height = Math.Max(1, shape.Height);
@@ -314,7 +321,7 @@ public partial class MainWindow : Window
         }
         if (draft != null)
         {
-            if (draft.Kind is "rect" or "ellipse" ? draft.Width > 4 && draft.Height > 4 :
+            if (draft.Kind is "rect" or "ellipse" or "cover" ? draft.Width > 4 && draft.Height > 4 :
                 draft.Kind is "pen" or "marker" || draft.Points.Count > 1 && (draft.Points[^1].ToPoint() - draft.Points[0].ToPoint()).Length > 4)
             { Surface.Add(draft); changed = true; }
             draft = null; Surface.Preview(null);
@@ -506,8 +513,8 @@ public partial class MainWindow : Window
     private async void OnAddMap(object sender, RoutedEventArgs e)
     {
         CommitEditor();
-        var dialog = new OpenFileDialog { Title = "Добавить карту", Filter = "Изображения|*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff|Все файлы|*.*" };
-        if (dialog.ShowDialog(this) == true) await AddMapAsync(dialog.FileName);
+        var dialog = new OpenFileDialog { Title = "Добавить карту", Filter = "Изображения и PDF|*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff;*.pdf|Все файлы|*.*" };
+        if (dialog.ShowDialog(this) == true) { if (Path.GetExtension(dialog.FileName).Equals(".pdf", StringComparison.OrdinalIgnoreCase)) await ImportPdfAsync(dialog.FileName); else await AddMapAsync(dialog.FileName); }
     }
     internal async Task AddMapAsync(string path)
     {
@@ -529,6 +536,7 @@ public partial class MainWindow : Window
         var paths = (string[])e.Data.GetData(DataFormats.FileDrop);
         if (paths.Length == 0) return;
         if (Path.GetExtension(paths[0]).Equals(".hboard", StringComparison.OrdinalIgnoreCase)) await OpenLessonAsync(paths[0]);
+        else if (Path.GetExtension(paths[0]).Equals(".pdf", StringComparison.OrdinalIgnoreCase)) await ImportPdfAsync(paths[0]);
         else await AddMapAsync(paths[0]);
     }
 

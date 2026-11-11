@@ -139,6 +139,7 @@ public sealed class BoardSurface : FrameworkElement
         {
             var shape = new Rect(item.X, item.Y, item.Width, item.Height); shape.Inflate(item.Size / 2 + 2, item.Size / 2 + 2); return shape;
         }
+        if (item.Kind == "cover") return new Rect(item.X, item.Y, item.Width, item.Height);
         if (item.Kind == "timeline") return new Rect(item.X, item.Y, item.Width, Timeline.Arrange(item).Height);
         if (item.Kind == "callout")
         {
@@ -164,7 +165,7 @@ public sealed class BoardSurface : FrameworkElement
         {
             var item = Lesson.Items[n];
             if (!includeImages && item.Kind == "image") continue;
-            if (item.Kind is "text" or "image" or "timeline")
+            if (item.Kind is "text" or "image" or "timeline" or "cover")
             {
                 var bounds = Bounds(item); bounds.Inflate(5, 5);
                 if (bounds.Contains(point)) return item;
@@ -189,7 +190,28 @@ public sealed class BoardSurface : FrameworkElement
         return null;
     }
 
-    public static bool Resizable(BoardItem item) => item.Kind is "image" or "rect" or "ellipse" or "timeline";
+    public static bool Resizable(BoardItem item) => item.Kind is "image" or "rect" or "ellipse" or "timeline" or "cover";
+
+    // In the editor covers are translucent so the teacher sees what lies beneath;
+    // in the show, in exports and in printed PDF they are opaque.
+    public bool EditorLook { get; set; } = true;
+    public void SetEditorLook(bool editor)
+    {
+        if (EditorLook == editor) return;
+        EditorLook = editor;
+        foreach (var item in Lesson.Items.Where(i => i.Kind == "cover")) Refresh(item);
+    }
+
+    private void DrawCover(DrawingContext dc, BoardItem item)
+    {
+        var rect = new Rect(0, 0, item.Width, item.Height);
+        var radius = Math.Min(10, Math.Min(item.Width, item.Height) / 4);
+        dc.DrawRoundedRectangle(EditorLook ? Translucent(item.Color, 0xC8) : Brush(item.Color), EditorLook ? new Pen(Brushes.White, 1.5) { DashStyle = DashStyles.Dash } : null, rect, radius, radius);
+        var label = new FormattedText(item.Text.Length > 0 ? item.Text : "?", CultureInfo.GetCultureInfo("ru-RU"), FlowDirection.LeftToRight,
+            new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal), Math.Max(8, Math.Min(48, Math.Min(item.Height * .55, item.Width * .4))), Brushes.White, 1.0)
+        { MaxTextWidth = Math.Max(10, item.Width - 8), TextAlignment = TextAlignment.Center, MaxLineCount = 2, Trimming = TextTrimming.CharacterEllipsis };
+        dc.DrawText(label, new Point(4, (item.Height - label.Height) / 2));
+    }
 
     // Outlined shapes are picked by their border, so the map inside a circled area stays clickable.
     public static bool ShapeHit(BoardItem item, Point point)
@@ -254,6 +276,7 @@ public sealed class BoardSurface : FrameworkElement
             else dc.DrawEllipse(fill, outline, new Point(item.Width / 2, item.Height / 2), item.Width / 2, item.Height / 2);
         }
         else if (item.Kind == "callout") DrawCallout(dc, item);
+        else if (item.Kind == "cover") DrawCover(dc, item);
         else if (item.Kind == "timeline") Timeline.Draw(dc, item);
         else if (item.Points.Count > 0)
         {
@@ -349,7 +372,8 @@ public sealed class BoardSurface : FrameworkElement
                 dc.DrawText(caption, new Point(tag.X + 6 / scale, tag.Y + 2 / scale));
             }
         if (ShowStepBadges)
-            foreach (var stepped in Lesson.Items.Where(i => i.Step > 0))
+            // One badge per group: a route drawn from several arrows shows its step once.
+            foreach (var stepped in Lesson.Items.Where(i => i.Step > 0).DistinctBy(i => i.GroupId ?? i.Id))
             {
                 // Numbered badges show the reveal order in the editor; they never appear in exports or the show.
                 var corner = Bounds(stepped).TopLeft; var radius = 11 / scale;
@@ -427,6 +451,12 @@ public sealed class BoardSurface : FrameworkElement
         else if (region == null) area.Inflate(32, 32);
         var scale = Math.Min(maxSide / area.Width, maxSide / area.Height);
         if (!allowUpscale) scale = Math.Min(1, scale);
+        var editorLook = EditorLook; EditorLook = false;
+        try { return RenderScaled(area, scale); } finally { EditorLook = editorLook; }
+    }
+
+    private BitmapSource RenderScaled(Rect area, double scale)
+    {
         scale = Math.Min(scale, Math.Sqrt(32_000_000 / (area.Width * area.Height)));
         var width = Math.Max(1, (int)Math.Ceiling(area.Width * scale));
         var height = Math.Max(1, (int)Math.Ceiling(area.Height * scale));

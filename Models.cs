@@ -8,7 +8,7 @@ using System.Windows.Media.Imaging;
 
 namespace HistoryBoard;
 
-public enum BoardTool { Select, Hand, Text, List, Pen, Arrow, Eraser, Marker, Rectangle, Ellipse, Callout }
+public enum BoardTool { Select, Hand, Text, List, Pen, Arrow, Eraser, Marker, Rectangle, Ellipse, Callout, Cover }
 
 public sealed class BoardItem
 {
@@ -91,12 +91,12 @@ public static class LessonFile
     public const int WorkingImageWidth = 3600;
     public const string BackupExtension = ".bak";
     public const int CurrentVersion = 3;
-    public static readonly string[] Kinds = ["text", "image", "pen", "arrow", "marker", "rect", "ellipse", "callout", "timeline"];
+    public static readonly string[] Kinds = ["text", "image", "pen", "arrow", "marker", "rect", "ellipse", "callout", "timeline", "cover"];
 
     // Version 3 adds shapes, markers, callouts, timelines, image crop/rotation and reveal steps.
     // Lessons that use none of them are still written as version 2 so that 1.2 can open them.
     public static int RequiredVersion(Lesson lesson) =>
-        lesson.Items.Any(i => i.Kind is "marker" or "rect" or "ellipse" or "callout" or "timeline" || i.Fill != null || i.Rotation != 0 || i.IsCropped || i.Step != 0) ? 3 : 2;
+        lesson.Items.Any(i => i.Kind is "marker" or "rect" or "ellipse" or "callout" or "timeline" or "cover" || i.Fill != null || i.Rotation != 0 || i.IsCropped || i.Step != 0) ? 3 : 2;
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
     public static string BackupPath(string path) => path + BackupExtension;

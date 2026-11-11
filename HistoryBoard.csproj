@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>HistoryBoard</AssemblyName>
     <RootNamespace>HistoryBoard</RootNamespace>
-    <Version>1.3.2</Version>
+    <Version>1.4.0</Version>
     <Title>Доска истории</Title>
     <Product>Доска истории</Product>
     <Description>Интерактивная доска для учителя истории</Description>
@@ -19,5 +19,9 @@
   <ItemGroup>
     <Resource Include="Assets\app.ico"/>
     <Resource Include="Assets\brand.png"/>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- PDFium (Apache-2.0) renders imported PDF pages; its win-x64 library is bundled into the single file. -->
+    <PackageReference Include="bblanchon.PDFium.Win32" Version="158.0.8111"/>
   </ItemGroup>
 </Project>

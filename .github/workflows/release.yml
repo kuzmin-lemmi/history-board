@@ -49,7 +49,12 @@ jobs:
           gh release upload $env:RELEASE_TAG `
             'Готовое приложение/HistoryBoard-Setup-win-x64.exe' `
             'Готовое приложение/HistoryBoard-Setup-win-x64.exe.sha256' `
-            README.md --clobber --repo $env:GITHUB_REPOSITORY
+            README.md `
+            'docs/ADMIN.md#Памятка для администратора школы' `
+            'Готовое приложение/Примеры уроков/lesson-ancient-rome.hboard#Пример урока: Древний Рим' `
+            'Готовое приложение/Примеры уроков/lesson-1812.hboard#Пример урока: Отечественная война 1812 года' `
+            'Готовое приложение/Примеры уроков/lesson-great-patriotic-war.hboard#Пример урока: Великая Отечественная война' `
+            --clobber --repo $env:GITHUB_REPOSITORY
           if ($LASTEXITCODE -ne 0) { throw 'Unable to upload release assets.' }
       - name: Keep test results
         if: always()

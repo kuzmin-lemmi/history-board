@@ -46,6 +46,23 @@ public sealed class PresentationOverlay : FrameworkElement
 public partial class MainWindow
 {
     private int revealStep;
+    private readonly HashSet<string> revealedCovers = [];
+
+    // In the show a click on a cover opens it; a click on the same place closes it again.
+    internal bool ToggleCoverAt(Point world)
+    {
+        for (var n = lesson.Items.Count - 1; n >= 0; n--)
+        {
+            var item = lesson.Items[n];
+            if (item.Kind != "cover" || !Surface.Bounds(item).Contains(world)) continue;
+            var revealed = revealedCovers.Contains(item.Id);
+            if (!revealed && Surface.IsHidden(item)) continue; // not yet shown by its reveal step
+            if (revealed) revealedCovers.Remove(item.Id); else revealedCovers.Add(item.Id);
+            Surface.HideItem(item, !revealed);
+            return true;
+        }
+        return false;
+    }
     private bool curtainDragging;
     private double curtainGrip;
 
@@ -105,6 +122,7 @@ public partial class MainWindow
         var frame = presenting && activeFrame >= 0 && activeFrame < lesson.Frames.Count ? lesson.Frames[activeFrame].Bounds : Rect.Empty;
         foreach (var item in lesson.Items.Where(i => i.Step > 0))
             Surface.HideItem(item, !frame.IsEmpty && item.Step > revealStep && frame.IntersectsWith(Surface.Bounds(item)));
+        foreach (var item in lesson.Items.Where(i => revealedCovers.Contains(i.Id))) Surface.HideItem(item, true);
         if (!frame.IsEmpty)
         {
             var steps = FrameSteps(activeFrame);
@@ -133,5 +151,9 @@ public partial class MainWindow
         }
     }
 
-    private void ShowAllSteps() { foreach (var item in lesson.Items.Where(i => i.Step > 0)) Surface.HideItem(item, false); }
+    private void ShowAllSteps()
+    {
+        foreach (var item in lesson.Items.Where(i => i.Step > 0 || revealedCovers.Contains(i.Id))) Surface.HideItem(item, false);
+        revealedCovers.Clear();
+    }
 }

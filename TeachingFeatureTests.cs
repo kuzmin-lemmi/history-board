@@ -64,7 +64,7 @@ public partial class MainWindow
         check(lesson.Items.Count(i => i.Kind == "callout") == 1 && undoDepth() == depth, "An empty callout is discarded without an undo step");
 
         // ---- Timeline ----
-        check(Timeline.Year("1812") == 1812 && Timeline.Year("22 июня 1941") == 1941 && Timeline.Year("753 до н. э.") == -753 && Timeline.Year("XIX век") == 1850 && Timeline.Year("17 в.") == 1650 && Timeline.Year("Смута") == null,
+        check(Timeline.Year("1812") == 1812 && Math.Floor(Timeline.Year("22 июня 1941")!.Value) == 1941 && Timeline.Year("22 июня 1941") < Timeline.Year("8 сентября 1941") && Timeline.Year("5 декабря 1941") < Timeline.Year("1942") && Timeline.Year("753 до н. э.") == -753 && Timeline.Year("XIX век") == 1850 && Timeline.Year("17 в.") == 1650 && Timeline.Year("Смута") == null,
             "Timeline dates are read as years, including BC dates and centuries");
         var events = Timeline.Parse("1812 — Отечественная война\n1825: Восстание декабристов\n1941 - 1945 — Великая Отечественная война\n\nСмута");
         check(events.Count == 4 && events[0].Title == "Отечественная война" && events[1].Title == "Восстание декабристов" && events[2].Date == "1941 - 1945" && events[3].Title == "", "Timeline lines split into date and event with the usual separators");
@@ -191,8 +191,8 @@ public partial class MainWindow
 
         Surface.Select(timeline); SetTool(BoardTool.Select); Fit(); UpdateUi(); await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         CaptureWindow(Path.Combine(directory, "12-teaching-tools.png"));
-        check(toolButtons.Count == 11 && toolButtons.Values.Last().TranslatePoint(new Point(0, toolButtons.Values.Last().ActualHeight), ToolRail).Y <= ToolRail.ActualHeight - 30,
-            "All eleven tools fit in the tool rail above the help button");
+        check(toolButtons.Count == 12 && toolButtons.Values.Last().TranslatePoint(new Point(0, toolButtons.Values.Last().ActualHeight), ToolRail).Y <= ToolRail.ActualHeight - 30,
+            "All twelve tools fit in the tool rail above the help button");
     }
 
     private async Task<BoardItem> AddTestMap()

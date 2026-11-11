@@ -184,6 +184,21 @@ public partial class MainWindow
         return window.ShowDialog() == true ? selection : null;
     }
 
+    // Covers hide an answer until a click in the show; this one covers the current selection.
+    private string CoverColor => color == "#26352F" ? "#58725B" : color;
+    internal BoardItem? CoverSelection()
+    {
+        CommitEditor(); FinishGesture();
+        var bounds = Surface.SelectedBounds;
+        if (bounds.IsEmpty) { Status.Text = "Выделите надпись или часть карты, которую нужно закрыть плашкой."; return null; }
+        bounds.Inflate(6, 6);
+        var before = lesson.Clone();
+        var cover = new BoardItem { Kind = "cover", X = bounds.X, Y = bounds.Y, Width = bounds.Width, Height = bounds.Height, Color = CoverColor, Size = 4 };
+        Surface.Add(cover); SetTool(BoardTool.Select); Surface.Select(cover); Changed(before);
+        Status.Text = "● Плашка добавлена. В показе щелчок по ней открывает ответ.";
+        return cover;
+    }
+
     // Reveal steps: objects with a step appear one click after another while their frame is shown.
     internal void SetStep(int step)
     {

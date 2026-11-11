@@ -18,7 +18,12 @@
       <Button Grid.Column="1" Content="Открыть файл…" Click="OnOpenFile" VerticalAlignment="Bottom" MinHeight="44" Margin="0,0,8,0" Background="#E8EDDF"/>
       <Button Grid.Column="2" Content="Новый урок" Click="OnNewLesson" VerticalAlignment="Bottom" MinHeight="44" Background="#58725B" Foreground="White"/>
     </Grid>
-    <TextBlock x:Name="Summary" Grid.Row="2" FontSize="13" Foreground="#56665B" Margin="0,0,0,12" TextWrapping="Wrap"/>
+    <DockPanel Grid.Row="2" Margin="0,0,0,12">
+      <StackPanel x:Name="Examples" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+        <TextBlock Text="Примеры уроков:" FontSize="13" Foreground="#56665B" VerticalAlignment="Center" Margin="12,0,8,0"/>
+      </StackPanel>
+      <TextBlock x:Name="Summary" FontSize="13" Foreground="#56665B" TextWrapping="Wrap" VerticalAlignment="Center"/>
+    </DockPanel>
     <Grid Grid.Row="3">
       <ListBox x:Name="LessonsList" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" SelectionChanged="OnSelectionChanged" MouseDoubleClick="OnOpenSelected" AutomationProperties.Name="Недавние уроки">
         <ListBox.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ListBox.ItemsPanel>
@@ -44,7 +49,7 @@
       </ListBox>
       <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="440" IsHitTestVisible="False">
         <TextBlock x:Name="EmptyTitle" Text="Здесь появятся ваши уроки" FontFamily="Georgia" FontSize="23" HorizontalAlignment="Center" TextAlignment="Center"/>
-        <TextBlock x:Name="EmptyDescription" Text="Откройте .hboard или сохраните новый урок. Он появится в библиотеке вместе с миниатюрой." FontSize="15" Foreground="#56665B" TextWrapping="Wrap" TextAlignment="Center" Margin="0,16,0,0"/>
+        <TextBlock x:Name="EmptyDescription" Text="Откройте .hboard или сохраните новый урок. Он появится в библиотеке вместе с миниатюрой. Чтобы посмотреть, как выглядит готовый урок, откройте пример справа вверху." FontSize="15" Foreground="#56665B" TextWrapping="Wrap" TextAlignment="Center" Margin="0,16,0,0"/>
       </StackPanel>
     </Grid>
     <Grid Grid.Row="4" Margin="0,16,0,0">

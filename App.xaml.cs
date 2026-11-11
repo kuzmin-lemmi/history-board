@@ -29,6 +29,13 @@ public partial class App : Application
             catch (Exception ex) { File.WriteAllText(Path.Combine(DataDirectory, "failure.txt"), ex.ToString()); window.CloseWithoutPrompt(); Shutdown(1); }
             return;
         }
+        var examplesIndex = Array.IndexOf(e.Args, "--write-examples");
+        if (examplesIndex >= 0 && examplesIndex + 1 < e.Args.Length)
+        {
+            try { DemoLessons.WriteAll(Path.GetFullPath(e.Args[examplesIndex + 1])); Shutdown(0); }
+            catch (Exception ex) { Console.Error.WriteLine(ex); Shutdown(1); }
+            return;
+        }
         if (e.Args.Contains("--uninstall")) { Installer.Uninstall(); Shutdown(); return; }
         var waitIndex = Array.IndexOf(e.Args, "--wait-for-process");
         if (waitIndex >= 0 && waitIndex + 1 < e.Args.Length && int.TryParse(e.Args[waitIndex + 1], out var processId) && processId > 0 && processId != Environment.ProcessId)

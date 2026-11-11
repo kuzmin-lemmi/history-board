@@ -15,6 +15,12 @@ public partial class LibraryWindow : Window
     public LibraryWindow(LessonLibrary library)
     {
         this.library = library; InitializeComponent(); Reload();
+        foreach (var demo in DemoLessons.All)
+        {
+            var button = new Button { Content = demo.Title, Margin = new Thickness(0, 0, 6, 0), Padding = new Thickness(10, 5, 10, 5), Background = System.Windows.Media.Brushes.White, ToolTip = "Готовый урок с лентой времени, кадрами, плашками и шагами появления" };
+            button.Click += (_, _) => OpenExample(demo);
+            Examples.Children.Add(button);
+        }
         Loaded += (_, _) => SearchBox.Focus();
     }
 
@@ -27,7 +33,7 @@ public partial class LibraryWindow : Window
         LessonsList.ItemsSource = filtered;
         EmptyState.Visibility = filtered.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         EmptyTitle.Text = entries.Count == 0 ? "Здесь появятся ваши уроки" : "Ничего не найдено";
-        EmptyDescription.Text = entries.Count == 0 ? "Откройте .hboard или сохраните новый урок. Он появится в библиотеке вместе с миниатюрой." : "Попробуйте другое название или часть имени файла.";
+        EmptyDescription.Text = entries.Count == 0 ? "Откройте .hboard или сохраните новый урок. Он появится в библиотеке вместе с миниатюрой. Чтобы посмотреть, как выглядит готовый урок, откройте пример справа вверху." : "Попробуйте другое название или часть имени файла.";
         Summary.Text = library.Warning ?? $"Недавние уроки: {filtered.Count} · Файлы хранятся на своих местах";
     }
     private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -46,6 +52,11 @@ public partial class LibraryWindow : Window
     {
         var dialog = new OpenFileDialog { Title = "Открыть урок", Filter = "Урок на доске (*.hboard)|*.hboard" };
         if (dialog.ShowDialog(this) == true) { SelectedPath = dialog.FileName; DialogResult = true; }
+    }
+    internal void OpenExample(DemoLessons.Demo demo)
+    {
+        try { SelectedPath = DemoLessons.EnsureFile(demo); DialogResult = true; }
+        catch (Exception ex) { Summary.Text = "Не удалось подготовить пример: " + ex.Message; }
     }
     private void OnNewLesson(object sender, RoutedEventArgs e) { NewLessonRequested = true; DialogResult = true; }
     private void OnReturn(object sender, RoutedEventArgs e) => Close();

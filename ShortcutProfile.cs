@@ -12,7 +12,7 @@ public enum BoardCommand
     Group, Ungroup, ToggleLock, Delete, Bold, Fit, AddFrame, Present, Fullscreen, Settings,
     SelectTool, HandTool, TextTool, ListTool, PenTool, ArrowTool, EraserTool,
     NextFrame, PreviousFrame, PresentationNext, PresentationPrevious, PresentationFirst, PresentationLast,
-    ResetZoom, MarkerTool, RectangleTool, EllipseTool, CalloutTool, AddTimeline, PresentationPointer, PresentationSpotlight, PresentationCurtain
+    ResetZoom, CoverTool, CoverSelection, PresentationTimer, ScreenCapture, MarkerTool, RectangleTool, EllipseTool, CalloutTool, AddTimeline, PresentationPointer, PresentationSpotlight, PresentationCurtain
 }
 
 public readonly record struct ShortcutGesture(Key Key, ModifierKeys Modifiers = ModifierKeys.None)
@@ -75,6 +75,9 @@ public sealed class ShortcutProfile
         new(BoardCommand.RectangleTool, "Прямоугольник", "Инструменты", ShortcutContext.Editor, false, new ShortcutGesture(Key.R)),
         new(BoardCommand.EllipseTool, "Овал", "Инструменты", ShortcutContext.Editor, false, new ShortcutGesture(Key.O)),
         new(BoardCommand.CalloutTool, "Выноска", "Инструменты", ShortcutContext.Editor, false, new ShortcutGesture(Key.B)),
+        new(BoardCommand.CoverTool, "Плашка «открыть щелчком»", "Инструменты", ShortcutContext.Editor, false, new ShortcutGesture(Key.K)),
+        new(BoardCommand.CoverSelection, "Закрыть выделение плашкой", "Редактирование", ShortcutContext.Editor, false, Ctrl(Key.H)),
+        new(BoardCommand.ScreenCapture, "Снимок области экрана", "Уроки", ShortcutContext.Editor, false, CtrlShift(Key.M)),
         new(BoardCommand.AddTimeline, "Добавить ленту времени", "Уроки", ShortcutContext.Editor, false, Ctrl(Key.T)),
         new(BoardCommand.Present, "Начать / завершить показ", "Показ", ShortcutContext.Both, false, new ShortcutGesture(Key.F5)),
         new(BoardCommand.PresentationNext, "Следующий кадр в показе", "Показ", ShortcutContext.Presentation, false, new ShortcutGesture(Key.Right), new ShortcutGesture(Key.Next), new ShortcutGesture(Key.Space)),
@@ -84,6 +87,7 @@ public sealed class ShortcutProfile
         new(BoardCommand.PresentationPointer, "Указка", "Показ", ShortcutContext.Presentation, false, new ShortcutGesture(Key.P)),
         new(BoardCommand.PresentationSpotlight, "Прожектор", "Показ", ShortcutContext.Presentation, false, new ShortcutGesture(Key.S)),
         new(BoardCommand.PresentationCurtain, "Шторка", "Показ", ShortcutContext.Presentation, false, new ShortcutGesture(Key.B)),
+        new(BoardCommand.PresentationTimer, "Таймер", "Показ", ShortcutContext.Both, false, CtrlShift(Key.T)),
         new(BoardCommand.Fullscreen, "Полный экран", "Общие", ShortcutContext.Both, true, new ShortcutGesture(Key.F11)),
         new(BoardCommand.Settings, "Настройки", "Общие", ShortcutContext.Editor, true, Ctrl(Key.OemComma))
     };

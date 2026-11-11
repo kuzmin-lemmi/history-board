@@ -13,6 +13,7 @@ public static partial class Timeline
     public sealed record Placed(Event Event, double X, int Row, FormattedText Date, FormattedText? Title, double Wrap);
     public sealed record Layout(IReadOnlyList<Placed> Events, double AxisY, double TitleTop, double TitleRowHeight, double Height, bool Proportional);
 
+    public const int MaxRows = 4;
     public const string Example = "1812 — Отечественная война\n1825 — Восстание декабристов\n1861 — Отмена крепостного права\n1905 — Первая русская революция";
     private static readonly string[] Separators = [" — ", " – ", " - ", "\t", ": "];
 
@@ -56,9 +57,31 @@ public static partial class Timeline
         {
             var numbers = NumberPattern().Matches(date).Select(m => m.Value).ToList();
             var year = numbers.FirstOrDefault(n => n.Length >= 3) ?? numbers.LastOrDefault();
-            if (year != null) value = int.Parse(year, CultureInfo.InvariantCulture);
+            if (year != null)
+            {
+                value = int.Parse(year, CultureInfo.InvariantCulture);
+                // "22 июня 1941" lies between "8 сентября 1941" and "1942" on the axis.
+                if (!beforeEra && year.Length >= 3 && Month(date) is { } month)
+                {
+                    var day = numbers.Where(n => n.Length <= 2).Select(n => int.Parse(n, CultureInfo.InvariantCulture)).FirstOrDefault(d => d is >= 1 and <= 31);
+                    value += (month - 1) / 12.0 + Math.Max(0, day - 1) / 372.0;
+                }
+            }
         }
         return value is { } v && beforeEra && v > 0 ? -v : value;
+    }
+
+    private static readonly (string Stem, int Month)[] Months =
+        [("январ", 1), ("феврал", 2), ("март", 3), ("апрел", 4), ("мая", 5), ("май", 5), ("июн", 6), ("июл", 7), ("август", 8), ("сентябр", 9), ("октябр", 10), ("ноябр", 11), ("декабр", 12)];
+    private static int? Month(string date)
+    {
+        var lower = date.ToLowerInvariant(); var best = -1; int? month = null;
+        foreach (var (stem, number) in Months)
+        {
+            var index = lower.IndexOf(stem, StringComparison.Ordinal);
+            if (index >= 0 && (best < 0 || index < best)) { best = index; month = number; }
+        }
+        return month;
     }
 
     private static int Roman(string text)
@@ -90,7 +113,7 @@ public static partial class Timeline
         var span = Math.Max(1, item.Width - 2 * padding);
         var min = proportional ? ordered.Min(e => e.Year!.Value) : 0; var max = proportional ? ordered.Max(e => e.Year!.Value) : 1;
         var wrap = Math.Clamp(ordered.Count > 1 ? span / (ordered.Count - 1) * 1.7 : span, 90, Math.Max(90, item.Size * 11));
-        var lastX = new[] { double.NegativeInfinity, double.NegativeInfinity };
+        var lastX = Enumerable.Repeat(double.NegativeInfinity, MaxRows).ToArray();
         var placed = new List<Placed>();
         for (var i = 0; i < ordered.Count; i++)
         {
@@ -98,9 +121,10 @@ public static partial class Timeline
             var x = padding + (proportional ? (e.Year!.Value - min) / (max - min) * span : ordered.Count == 1 ? span / 2 : i * span / (ordered.Count - 1));
             var date = Text(e.Date, item.Size, true, item);
             var title = e.Title.Length > 0 ? Text(e.Title, Math.Max(10, item.Size * .72), false, item, wrap) : null;
-            // Labels of close events go to the second row when they would overlap in the first one.
+            // Labels of close events move to the next row when they would overlap (up to four rows).
             var half = Math.Max(date.Width, title?.Width ?? 0) / 2 + item.Size * .3;
-            var row = x - half >= lastX[0] ? 0 : x - half >= lastX[1] ? 1 : lastX[0] <= lastX[1] ? 0 : 1;
+            var row = Array.FindIndex(lastX, last => x - half >= last);
+            if (row < 0) row = Array.IndexOf(lastX, lastX.Min());
             lastX[row] = x + half;
             placed.Add(new Placed(e, x, row, date, title, wrap));
         }

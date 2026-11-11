@@ -27,13 +27,13 @@ public partial class MainWindow
             var button = definition.Command switch
             {
                 BoardCommand.New => NewLessonButton, BoardCommand.Open => null, BoardCommand.Library => LibraryButton,
-                BoardCommand.Save => SaveButton, BoardCommand.AddImage => AddImageButton,
+                BoardCommand.Save => SaveButton,
                 BoardCommand.Undo => UndoButton, BoardCommand.Redo => RedoButton, BoardCommand.Bold => BoldButton,
                 BoardCommand.ToggleLock => LockButton, BoardCommand.Delete => DeleteButton,
                 BoardCommand.Present => PresentButton, BoardCommand.Fullscreen => FullscreenButton,
-                BoardCommand.Fit => FitButton, BoardCommand.AddFrame => AddFrameButton, BoardCommand.ResetZoom => ZoomResetButton,
+                BoardCommand.Fit => FitButton, BoardCommand.AddFrame => AddFrameButton, BoardCommand.ResetZoom => ZoomResetButton, BoardCommand.PresentationTimer => TimerButton,
                 BoardCommand.NextFrame => NextFrameButton, BoardCommand.PreviousFrame => PreviousFrameButton,
-                BoardCommand.Settings => SettingsButton, BoardCommand.AddTimeline => TimelineButton,
+                BoardCommand.Settings => SettingsButton,
                 BoardCommand.PresentationPointer => PointerButton, BoardCommand.PresentationSpotlight => SpotlightButton, BoardCommand.PresentationCurtain => CurtainButton, _ => null
             };
             if (button != null) button.ToolTip = definition.Name + " · " + shortcuts.Display(definition.Command);
@@ -45,14 +45,14 @@ public partial class MainWindow
     private static readonly (BoardTool Tool, BoardCommand Command)[] ToolCommands =
     [ (BoardTool.Select, BoardCommand.SelectTool), (BoardTool.Hand, BoardCommand.HandTool), (BoardTool.Text, BoardCommand.TextTool),
       (BoardTool.List, BoardCommand.ListTool), (BoardTool.Pen, BoardCommand.PenTool), (BoardTool.Arrow, BoardCommand.ArrowTool), (BoardTool.Eraser, BoardCommand.EraserTool),
-      (BoardTool.Marker, BoardCommand.MarkerTool), (BoardTool.Rectangle, BoardCommand.RectangleTool), (BoardTool.Ellipse, BoardCommand.EllipseTool), (BoardTool.Callout, BoardCommand.CalloutTool) ];
+      (BoardTool.Marker, BoardCommand.MarkerTool), (BoardTool.Rectangle, BoardCommand.RectangleTool), (BoardTool.Ellipse, BoardCommand.EllipseTool), (BoardTool.Callout, BoardCommand.CalloutTool), (BoardTool.Cover, BoardCommand.CoverTool) ];
 
     private void ShowShortcutHelp()
     {
         BoardCommand[] commands = [BoardCommand.Save, BoardCommand.Open, BoardCommand.Undo, BoardCommand.Redo, BoardCommand.Copy, BoardCommand.Paste, BoardCommand.Duplicate, BoardCommand.Group, BoardCommand.Ungroup, BoardCommand.Present, BoardCommand.Fullscreen];
         var keys = string.Join("\n", commands.Select(c => ShortcutProfile.Definitions.Single(d => d.Command == c).Name + " — " + shortcuts.Display(c)));
         MessageBox.Show(this, "ВАШИ ГОРЯЧИЕ КЛАВИШИ\n" + keys +
-            "\n\nКнопка ⚙ открывает настройки всех сочетаний. В текстовых полях работают обычные команды ввода.\n\nДОСКА\nПробел + мышь, средняя кнопка или «Рука» перемещают поле. Ctrl + колёсико меняет масштаб. Рамка инструментом «Выбор» и Shift+клик выделяют несколько объектов. Двойной клик редактирует текст; Enter завершает надпись, Shift+Enter — новая строка. Выделение тянется за любое место рамки. Ctrl+1 — обычный масштаб 100%.\n\nКАДРЫ\nКадр — слайд презентации: рамка на доске показывает его границы. «＋ Кадр» сохраняет текущий вид, «↻ Обновить кадр» — новый вид для кадра, F5 — показ.\n\nИСТОРИЯ НА ДОСКЕ\n«＋ Лента» — лента времени из строк «дата — событие». Прямоугольник, овал и «Заливка» выделяют районы карты, маркер подчёркивает, выноска подписывает место. У выделенной карты — «Кадрировать» и «Повернуть».\n\nУРОКИ И ПОКАЗ\n«Уроки» открывает библиотеку с поиском. «Фон» меняет бумагу. Кнопка «＋ Кадр» запоминает текущий вид. В показе: указка (P), прожектор (S), шторка (B); «Действия → Появление в показе» задаёт порядок появления объектов. Esc завершает ввод или показ; «Экспорт» сохраняет PNG или все кадры в PDF.",
+            "\n\nКнопка ⚙ открывает настройки всех сочетаний. В текстовых полях работают обычные команды ввода.\n\nДОСКА\nПробел + мышь, средняя кнопка или «Рука» перемещают поле. Ctrl + колёсико меняет масштаб. Рамка инструментом «Выбор» и Shift+клик выделяют несколько объектов. Двойной клик редактирует текст; Enter завершает надпись, Shift+Enter — новая строка. Выделение тянется за любое место рамки. Ctrl+1 — обычный масштаб 100%.\n\nКАДРЫ\nКадр — слайд презентации: рамка на доске показывает его границы. «＋ Кадр» сохраняет текущий вид, «↻ Обновить кадр» — новый вид для кадра, F5 — показ.\n\nИСТОРИЯ НА ДОСКЕ\n«＋ Добавить» — карта, страницы PDF, снимок экрана или лента времени из строк «дата — событие». Плашка (K) закрывает ответ — в показе он открывается щелчком; «⏱ Таймер» — отсчёт времени на задание. Прямоугольник, овал и «Заливка» выделяют районы карты, маркер подчёркивает, выноска подписывает место. У выделенной карты — «Кадрировать» и «Повернуть».\n\nУРОКИ И ПОКАЗ\n«Уроки» открывает библиотеку с поиском. «Фон» меняет бумагу. Кнопка «＋ Кадр» запоминает текущий вид. В показе: указка (P), прожектор (S), шторка (B); «Действия → Появление в показе» задаёт порядок появления объектов. Esc завершает ввод или показ; «Экспорт» сохраняет PNG или все кадры в PDF.",
             "Как пользоваться доской", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
@@ -81,6 +81,9 @@ public partial class MainWindow
             case BoardCommand.Bold: OnBold(this, new RoutedEventArgs()); break;
             case BoardCommand.Fit: Fit(); break;
             case BoardCommand.ResetZoom: ResetZoom(); break;
+            case BoardCommand.CoverSelection: CoverSelection(); break;
+            case BoardCommand.PresentationTimer: ShowTimer(!TimerVisible); break;
+            case BoardCommand.ScreenCapture: await CaptureScreenAsync(); break;
             case BoardCommand.AddFrame: AddFrame(); break;
             case BoardCommand.Present: if (presenting) EndPresentation(); else StartPresentation(); break;
             case BoardCommand.Fullscreen: ToggleFullscreen(); break;
