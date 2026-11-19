@@ -1,11 +1,13 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Threading;
 
 namespace HistoryBoard;
 
 public partial class App : Application
 {
     public static string DataDirectory { get; private set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HistoryBoard", "Data");
+    private SingleInstance? instance;
 
     // The same executable is the installer and the board. Downloaded release files
     // ("HistoryBoard-Setup-win-x64.exe", also "… (1).exe" from browsers) and the local
@@ -55,10 +57,66 @@ public partial class App : Application
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             Installer.ShowInstaller(); Shutdown(); return;
         }
-        var main = new MainWindow(!e.Args.Any(a => a.EndsWith(".hboard", StringComparison.OrdinalIgnoreCase)));
-        MainWindow = main; main.Show();
+
+        DispatcherUnhandledException += OnUnhandledUiException;
+        AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
+        TaskScheduler.UnobservedTaskException += (_, args) => { CrashLog.Write("Фоновая задача", args.Exception); args.SetObserved(); };
+
         var file = e.Args.FirstOrDefault(a => a.EndsWith(".hboard", StringComparison.OrdinalIgnoreCase));
-        if (file != null) await main.OpenLessonAsync(file, false);
+        if (file != null) file = Path.GetFullPath(file);
+        try { instance = SingleInstance.Acquire(DataDirectory, file); }
+        catch (TimeoutException ex) { MessageBox.Show(ex.Message, "Доска истории", MessageBoxButton.OK, MessageBoxImage.Warning); Shutdown(1); return; }
+        if (instance == null) { Shutdown(0); return; } // the running board opens the file
+        var guard = instance;
+        Exit += (_, _) => guard.Dispose();
+
+        // The autosave is restored first; a file from the command line then opens like any other,
+        // so unsaved work from the previous session is never replaced without a question.
+        var main = new MainWindow(true, file);
+        MainWindow = main; main.Show();
+        guard.Listen(message => Dispatcher.BeginInvoke(() => main.ReceiveFromAnotherStart(message)));
         _ = main.CheckForUpdatesAsync(false);
+    }
+
+    private bool handlingError;
+    private DateTime errorSeriesStart;
+    private int errorsInSeries;
+
+    // Any error that escapes a command is caught here: the lesson is written to the autosave, the
+    // error goes to the log, and the board keeps working. Repeated errors close the board safely.
+    private void OnUnhandledUiException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        e.Handled = true;
+        CrashLog.Write("Ошибка в окне доски", e.Exception);
+        if (handlingError) return;
+        handlingError = true;
+        try
+        {
+            var board = MainWindow as HistoryBoard.MainWindow;
+            var saved = board?.EmergencySave() == true;
+            var now = DateTime.UtcNow;
+            if (now - errorSeriesStart > TimeSpan.FromSeconds(30)) { errorSeriesStart = now; errorsInSeries = 0; }
+            var closeBoard = ++errorsInSeries >= 3;
+            var lessonText = saved ? "Урок сохранён в автосохранение и откроется при следующем запуске." : "Сохранить урок автоматически не удалось — попробуйте сохранить его через Ctrl+S.";
+            var next = closeBoard ? "Ошибка повторяется, поэтому доска будет закрыта. Запустите её снова." : "Доска продолжит работу. Если что-то ведёт себя странно, сохраните урок и перезапустите программу.";
+            MessageBox.Show($"Произошла непредвиденная ошибка: {e.Exception.Message}\n\n{lessonText}\n{next}\n\nПодробности записаны в журнал:\n{CrashLog.LogPath}",
+                "Доска истории", MessageBoxButton.OK, MessageBoxImage.Warning);
+            if (closeBoard) { board?.CloseWithoutPrompt(); Shutdown(1); }
+        }
+        catch (Exception nested) { CrashLog.Write("Обработка ошибки", nested); }
+        finally { handlingError = false; }
+    }
+
+    // Errors on background threads end the process; save what can be saved first.
+    private void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
+    {
+        if (e.ExceptionObject is Exception error) CrashLog.Write("Ошибка в фоновом потоке", error);
+        if (!e.IsTerminating) return;
+        try
+        {
+            if (Dispatcher.CheckAccess()) (MainWindow as HistoryBoard.MainWindow)?.EmergencySave();
+            else Dispatcher.Invoke(() => (MainWindow as HistoryBoard.MainWindow)?.EmergencySave(), DispatcherPriority.Send, CancellationToken.None, TimeSpan.FromSeconds(5));
+        }
+        catch { /* The process is ending; the regular autosave remains. */ }
     }
 }

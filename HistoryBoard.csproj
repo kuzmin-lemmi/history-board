@@ -22,6 +22,6 @@
   </ItemGroup>
   <ItemGroup>
     <!-- PDFium (Apache-2.0) renders imported PDF pages; its win-x64 library is bundled into the single file. -->
-    <PackageReference Include="bblanchon.PDFium.Win32" Version="158.0.8111"/>
+    <PackageReference Include="bblanchon.PDFium.Win32" Version="159.0.8138"/>
   </ItemGroup>
 </Project>

@@ -437,8 +437,11 @@ public sealed class BoardSurface : FrameworkElement
     }
 
     public (byte[] Jpeg, int Width, int Height) RenderJpeg(Rect region, int maxSide, int quality = 88)
+        => EncodeJpeg(RenderBitmap(region, maxSide, true), quality);
+
+    // Safe on a background thread for a frozen bitmap.
+    public static (byte[] Jpeg, int Width, int Height) EncodeJpeg(BitmapSource bitmap, int quality = 88)
     {
-        var bitmap = RenderBitmap(region, maxSide, true);
         var encoder = new JpegBitmapEncoder { QualityLevel = quality };
         encoder.Frames.Add(BitmapFrame.Create(new FormatConvertedBitmap(bitmap, PixelFormats.Bgr24, null, 0)));
         using var memory = new MemoryStream(); encoder.Save(memory); return (memory.ToArray(), bitmap.PixelWidth, bitmap.PixelHeight);

@@ -61,28 +61,67 @@ public partial class MainWindow
     internal void ExportFramesPdf(string path)
     {
         var pages = lesson.Frames.Select(f => { var (jpeg, w, h) = Surface.RenderJpeg(f.Bounds, PdfPagePixels); return new PdfPage(jpeg, w, h); }).ToList();
+        WritePdfFile(path, lesson.Title, pages);
+    }
+
+    private static void WritePdfFile(string path, string title, IReadOnlyList<PdfPage> pages)
+    {
         var temporary = path + ".tmp";
         try
         {
-            using (var file = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None)) { PdfWriter.Write(file, lesson.Title, pages); file.Flush(true); }
+            using (var file = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None)) { PdfWriter.Write(file, title, pages); file.Flush(true); }
             File.Move(temporary, path, true);
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
 
-    private void OnExportPdf()
+    private bool exportingPdf;
+
+    // Pages are drawn one at a time on the window thread, which must own the board's visuals;
+    // encoding and writing run in the background, so the window stays responsive in between.
+    internal async Task ExportFramesPdfAsync(string path, IProgress<int>? progress, CancellationToken token)
+    {
+        var frames = lesson.Frames.Select(f => f.Bounds).ToList(); var title = lesson.Title;
+        var pages = new List<PdfPage>();
+        for (var i = 0; i < frames.Count; i++)
+        {
+            token.ThrowIfCancellationRequested();
+            var bitmap = Surface.RenderBitmap(frames[i], PdfPagePixels, true); bitmap.Freeze();
+            var (jpeg, width, height) = await Task.Run(() => BoardSurface.EncodeJpeg(bitmap), token);
+            pages.Add(new PdfPage(jpeg, width, height));
+            progress?.Report(i + 1);
+            await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
+        }
+        token.ThrowIfCancellationRequested();
+        await Task.Run(() => WritePdfFile(path, title, pages), token);
+    }
+
+    private async void OnExportPdf()
     {
         CommitEditor(); FinishGesture();
         if (lesson.Frames.Count == 0) { Status.Text = "Сначала добавьте кадры кнопкой «＋ Кадр»."; return; }
+        if (exportingPdf) return;
         var dialog = new SaveFileDialog { Title = "Сохранить кадры урока в PDF", Filter = "Документ PDF|*.pdf", FileName = SafeName(lesson.Title) + ".pdf", DefaultExt = ".pdf" };
         if (dialog.ShowDialog(this) != true) return;
+        var count = lesson.Frames.Count;
+        using var cancel = new CancellationTokenSource();
+        var label = new System.Windows.Controls.TextBlock { Text = $"Готовим страницу 1 из {count}…", FontSize = 13, Margin = new Thickness(0, 0, 0, 10) };
+        var bar = new System.Windows.Controls.ProgressBar { Minimum = 0, Maximum = count, Height = 8, Margin = new Thickness(0, 0, 0, 14) };
+        var stop = new System.Windows.Controls.Button { Content = "Отменить", Padding = new Thickness(14, 7, 14, 7), HorizontalAlignment = HorizontalAlignment.Right };
+        var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(20) };
+        panel.Children.Add(label); panel.Children.Add(bar); panel.Children.Add(stop);
+        var window = new Window { Owner = this, Title = "Экспорт в PDF", Width = 400, SizeToContent = SizeToContent.Height, ResizeMode = ResizeMode.NoResize, WindowStartupLocation = WindowStartupLocation.CenterOwner, ShowInTaskbar = false, Content = panel, Background = BoardSurface.Brush("#FAF7EF") };
+        var finished = false;
+        stop.Click += (_, _) => { cancel.Cancel(); label.Text = "Отменяем…"; };
+        window.Closing += (_, args) => { if (!finished) { args.Cancel = true; cancel.Cancel(); label.Text = "Отменяем…"; } };
+        exportingPdf = true; IsEnabled = false; window.Show();
         try
         {
-            Mouse.OverrideCursor = Cursors.Wait;
-            ExportFramesPdf(dialog.FileName);
-            Status.Text = $"●  PDF сохранён: {lesson.Frames.Count} стр. — {Path.GetFileName(dialog.FileName)}";
+            await ExportFramesPdfAsync(dialog.FileName, new Progress<int>(done => { bar.Value = done; label.Text = done < count ? $"Готовим страницу {done + 1} из {count}…" : "Записываем файл…"; }), cancel.Token);
+            Status.Text = $"●  PDF сохранён: {count} стр. — {Path.GetFileName(dialog.FileName)}";
         }
-        catch (Exception ex) { Error("Не удалось сохранить PDF", ex); }
-        finally { Mouse.OverrideCursor = null; }
+        catch (OperationCanceledException) { Status.Text = "Экспорт в PDF отменён, файл не создан."; }
+        catch (Exception ex) { finished = true; window.Close(); IsEnabled = true; Error("Не удалось сохранить PDF", ex); }
+        finally { finished = true; exportingPdf = false; IsEnabled = true; if (window.IsVisible) window.Close(); Activate(); }
     }
 }

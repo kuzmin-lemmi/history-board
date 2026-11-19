@@ -31,7 +31,7 @@ public partial class MainWindow : Window
     private bool gesture, resizing;
     private string AutosavePath => Path.Combine(App.DataDirectory, "last-lesson.hboard");
 
-    public MainWindow(bool restore = true)
+    public MainWindow(bool restore = true, string? startupFile = null)
     {
         InitializeComponent();
         shortcuts = ShortcutProfile.Load(SettingsPath);
@@ -41,7 +41,13 @@ public partial class MainWindow : Window
         EditLayer.RenderTransform = Surface.CameraTransform;
         ready = true;
         SetTool(BoardTool.Text); UpdateUi();
-        Loaded += (_, _) => { RestoreCamera(); if (restore) { RestoreAutosave(); Dispatcher.BeginInvoke(new Action(() => OnLibrary(this, new RoutedEventArgs()))); } };
+        Loaded += (_, _) =>
+        {
+            RestoreCamera();
+            if (restore) RestoreAutosave();
+            if (startupFile != null) Dispatcher.BeginInvoke(new Action(() => ReceiveFromAnotherStart(startupFile)));
+            else if (restore && Preferences.Load().ShowLibraryOnStart) Dispatcher.BeginInvoke(new Action(() => OnLibrary(this, new RoutedEventArgs())));
+        };
         autosaveTimer.Tick += async (_, _) => await AutosaveAsync();
     }
 
@@ -274,7 +280,8 @@ public partial class MainWindow : Window
                 }
                 if (draft.Points.Count == 1) draft.Points.Add(new(point.X, point.Y)); else draft.Points[1] = new(point.X, point.Y);
             }
-            else if ((point - draft.Points[^1].ToPoint()).Length > .8 / zoom) draft.Points.Add(new(point.X, point.Y));
+            // A very long stroke stops growing at the limit that a lesson file can reopen.
+            else if (draft.Points.Count < LessonFile.MaxPoints && (point - draft.Points[^1].ToPoint()).Length > .8 / zoom) draft.Points.Add(new(point.X, point.Y));
             Surface.Preview(draft);
         }
         else if (moving != null && moveOriginal != null)
@@ -608,7 +615,7 @@ public partial class MainWindow : Window
     {
         CommitEditor(); FinishGesture(); CommitTitle();
         if (revision == savedRevision) return true;
-        var result = MessageBox.Show(this, "Сохранить текущий урок в файл перед продолжением?", "Доска истории", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        var result = MessageBox.Show(this, $"В уроке «{lesson.Title}» есть несохранённые изменения. Сохранить их в файл перед продолжением?\n\n«Нет» — изменения не будут сохранены.", "Доска истории", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
         return result == MessageBoxResult.No || result == MessageBoxResult.Yes && await SaveLessonAsync();
     }
     private async void OnNew(object sender, RoutedEventArgs e)
@@ -671,6 +678,7 @@ public partial class MainWindow : Window
     {
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
         var textInput = Keyboard.FocusedElement is TextBox;
+        if (key == Key.Escape && capturing) { CancelScreenCapture(); e.Handled = true; return; }
         if (key == Key.Escape)
         {
             if (presenting) { if (Overlay.Mode != PresentationTool.None) SetPresentationTool(PresentationTool.None); else EndPresentation(); e.Handled = true; }
@@ -694,6 +702,8 @@ public partial class MainWindow : Window
         if (!await AutosaveAsync() && HasUnsavedChanges &&
             MessageBox.Show(this, "Автосохранение не удалось, несохранённые изменения будут потеряны. Всё равно закрыть доску?", "Доска истории", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
             return;
-        closing = true; Close();
+        // With nothing to save the checks above finish synchronously, still inside this Closing
+        // event, where WPF forbids calling Close; close right after the event instead.
+        closing = true; _ = Dispatcher.BeginInvoke(new Action(Close));
     }
 }
