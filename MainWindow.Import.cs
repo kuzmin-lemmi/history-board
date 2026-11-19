@@ -115,7 +115,8 @@ public sealed class PdfDocument : IDisposable
 
 public partial class MainWindow
 {
-    private const int PdfImportPixels = 2000;
+    // About 250 dpi for an A4 page: small print of a textbook stays readable when zoomed in.
+    private const int PdfImportPixels = 3000;
 
     private void OnAddMenu(object sender, RoutedEventArgs e)
     {
@@ -136,37 +137,84 @@ public partial class MainWindow
 
     // ---- Screen capture: the Windows snipping overlay puts the picture on the clipboard ----
     [DllImport("user32.dll")] private static extern uint GetClipboardSequenceNumber();
+    [DllImport("user32.dll")] private static extern IntPtr GetClipboardOwner();
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
     private bool capturing;
+    private CancellationTokenSource? captureCancel;
+    private static readonly TimeSpan CaptureTimeout = TimeSpan.FromSeconds(60);
+
+    // Pictures put on the clipboard by another program are not accepted, so an image copied
+    // elsewhere while the board waits never lands on the board.
+    internal static bool IsSnippingProcess(string? name) =>
+        name != null && (name.Equals("ScreenClippingHost", StringComparison.OrdinalIgnoreCase) || name.Equals("SnippingTool", StringComparison.OrdinalIgnoreCase) || name.Equals("ScreenSketch", StringComparison.OrdinalIgnoreCase));
+
+    private static string? ClipboardOwnerProcess()
+    {
+        try
+        {
+            var owner = GetClipboardOwner();
+            if (owner == IntPtr.Zero || GetWindowThreadProcessId(owner, out var id) == 0) return null;
+            using var process = Process.GetProcessById((int)id);
+            return process.ProcessName;
+        }
+        catch { return null; }
+    }
+
+    internal void CancelScreenCapture(string message = "Снимок экрана отменён.")
+    {
+        if (!capturing) return;
+        captureCancel?.Cancel(); Status.Text = message;
+    }
 
     private async void OnCaptureScreen(object sender, RoutedEventArgs e) => await CaptureScreenAsync();
 
-    internal async Task CaptureScreenAsync()
+    internal async Task CaptureScreenAsync(Func<string?>? ownerProcess = null, bool launchTool = true)
     {
         if (capturing || presenting) return;
         CommitEditor(); FinishGesture();
+        ownerProcess ??= ClipboardOwnerProcess;
         capturing = true;
+        using var cancel = new CancellationTokenSource(); captureCancel = cancel;
+        var leftBoard = false;
+        void OnDeactivatedForCapture(object? s, EventArgs a) => leftBoard = true;
+        // Esc or a click outside the selection closes the overlay and returns focus to the board.
+        void OnActivatedForCapture(object? s, EventArgs a) { if (leftBoard) _ = CancelIfNothingArrives(); }
+        async Task CancelIfNothingArrives()
+        {
+            try { await Task.Delay(1500, cancel.Token); } catch (OperationCanceledException) { return; }
+            if (capturing && captureCancel == cancel && IsActive) CancelScreenCapture();
+        }
+        Deactivated += OnDeactivatedForCapture; Activated += OnActivatedForCapture;
         try
         {
             var start = GetClipboardSequenceNumber();
-            try { Process.Start(new ProcessStartInfo("ms-screenclip:") { UseShellExecute = true }); }
-            catch { Status.Text = "Нажмите Win+Shift+S, выделите область экрана — снимок появится на доске."; }
             Status.Text = "Выделите область экрана — снимок сразу появится на доске. Esc отменяет.";
-            var until = DateTime.UtcNow.AddSeconds(90);
+            try { if (launchTool) Process.Start(new ProcessStartInfo("ms-screenclip:") { UseShellExecute = true }); }
+            catch { Status.Text = "Нажмите Win+Shift+S, выделите область экрана — снимок появится на доске."; }
+            var until = DateTime.UtcNow + CaptureTimeout;
             while (DateTime.UtcNow < until)
             {
-                await Task.Delay(250);
+                await Task.Delay(250, cancel.Token);
                 if (GetClipboardSequenceNumber() == start) continue;
-                await Task.Delay(200); // let the snipping tool finish writing all formats
+                await Task.Delay(200, cancel.Token); // let the snipping tool finish writing all formats
+                start = GetClipboardSequenceNumber();
+                // A picture copied in another program is skipped. Some tools write the clipboard
+                // without an owner window; such a picture is accepted, so snipping keeps working.
+                if (ownerProcess() is { } owner && !IsSnippingProcess(owner)) continue;
                 if (Clipboard.ContainsImage() || Clipboard.GetDataObject()?.GetDataPresent("PNG") == true)
                 {
                     Activate(); await PasteClipboardAsync(); return;
                 }
-                start = GetClipboardSequenceNumber();
             }
             Status.Text = "Снимок экрана не получен. Можно повторить или нажать Win+Shift+S и затем Ctrl+V.";
         }
+        catch (OperationCanceledException) { /* the message is already shown */ }
         catch (Exception ex) { Status.Text = "Не удалось сделать снимок: " + ex.Message; }
-        finally { capturing = false; }
+        finally
+        {
+            Deactivated -= OnDeactivatedForCapture; Activated -= OnActivatedForCapture;
+            capturing = false; captureCancel = null;
+        }
     }
 
     // ---- PDF import ----

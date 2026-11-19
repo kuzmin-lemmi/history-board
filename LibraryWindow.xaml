@@ -4,6 +4,7 @@
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
     <DockPanel Margin="0,0,0,24">
       <Image DockPanel.Dock="Left" Source="Assets/brand.png" Width="40" Height="40" Margin="0,0,16,0"/>
+      <CheckBox x:Name="ShowOnStart" DockPanel.Dock="Right" Content="Показывать при запуске" VerticalAlignment="Top" Margin="16,6,0,0" FontSize="13" Foreground="#56665B" Click="OnShowOnStartChanged" ToolTip="Если выключить, доска сразу откроет последний урок; библиотека — кнопка «Уроки»"/>
       <StackPanel>
         <TextBlock Text="Библиотека уроков" FontFamily="Georgia" FontSize="28" Foreground="#26352F"/>
         <TextBlock Text="Ваши карты, заметки и маршруты урока — под рукой" FontSize="14" Foreground="#56665B" Margin="0,8,0,0"/>
@@ -18,12 +19,12 @@
       <Button Grid.Column="1" Content="Открыть файл…" Click="OnOpenFile" VerticalAlignment="Bottom" MinHeight="44" Margin="0,0,8,0" Background="#E8EDDF"/>
       <Button Grid.Column="2" Content="Новый урок" Click="OnNewLesson" VerticalAlignment="Bottom" MinHeight="44" Background="#58725B" Foreground="White"/>
     </Grid>
-    <DockPanel Grid.Row="2" Margin="0,0,0,12">
-      <StackPanel x:Name="Examples" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-        <TextBlock Text="Примеры уроков:" FontSize="13" Foreground="#56665B" VerticalAlignment="Center" Margin="12,0,8,0"/>
+    <WrapPanel Grid.Row="2" Margin="0,0,0,12">
+      <TextBlock x:Name="Summary" FontSize="13" Foreground="#56665B" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,4,24,4"/>
+      <StackPanel x:Name="Examples" Orientation="Horizontal" VerticalAlignment="Center">
+        <TextBlock Text="Примеры уроков:" FontSize="13" Foreground="#56665B" VerticalAlignment="Center" Margin="0,0,8,0"/>
       </StackPanel>
-      <TextBlock x:Name="Summary" FontSize="13" Foreground="#56665B" TextWrapping="Wrap" VerticalAlignment="Center"/>
-    </DockPanel>
+    </WrapPanel>
     <Grid Grid.Row="3">
       <ListBox x:Name="LessonsList" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" SelectionChanged="OnSelectionChanged" MouseDoubleClick="OnOpenSelected" AutomationProperties.Name="Недавние уроки">
         <ListBox.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ListBox.ItemsPanel>
@@ -54,7 +55,10 @@
     </Grid>
     <Grid Grid.Row="4" Margin="0,16,0,0">
       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-      <Button x:Name="ForgetButton" Content="Убрать из списка" HorizontalAlignment="Left" IsEnabled="False" Click="OnForget" MinHeight="44" ToolTip="Файл урока останется на компьютере"/>
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+        <Button x:Name="ForgetButton" Content="Убрать из списка" IsEnabled="False" Click="OnForget" MinHeight="44" ToolTip="Файл урока останется на компьютере"/>
+        <Button Content="Более ранние версии…" Click="OnVersions" MinHeight="44" Margin="8,0,0,0" ToolTip="Автосохранения последних часов: можно вернуть урок к одной из них"/>
+      </StackPanel>
       <Button Grid.Column="1" Content="Вернуться на доску" Click="OnReturn" MinHeight="44" Margin="8,0"/>
       <Button x:Name="OpenButton" Grid.Column="2" Content="Открыть урок" Click="OnOpenSelected" IsEnabled="False" MinHeight="44" Background="#58725B" Foreground="White"/>
     </Grid>

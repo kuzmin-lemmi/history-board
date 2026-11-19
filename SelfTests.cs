@@ -169,6 +169,8 @@ public partial class MainWindow
         await RunTeachingFeatureTests(directory, Check);
         await RunFramesInputFeatureTests(directory, Check);
         await RunRelease14FeatureTests(directory, Check);
+        await RunStabilityFeatureTests(directory, Check);
+        await RunAuditFixesFeatureTests(directory, Check);
 
         var performance = new Stopwatch(); performance.Start();
         var stressLesson = new Lesson();

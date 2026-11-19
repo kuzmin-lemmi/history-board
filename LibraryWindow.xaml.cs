@@ -11,6 +11,7 @@ public partial class LibraryWindow : Window
     private List<LibraryLesson> entries = [];
     public string? SelectedPath { get; private set; }
     public bool NewLessonRequested { get; private set; }
+    public bool VersionsRequested { get; private set; }
 
     public LibraryWindow(LessonLibrary library)
     {
@@ -21,6 +22,7 @@ public partial class LibraryWindow : Window
             button.Click += (_, _) => OpenExample(demo);
             Examples.Children.Add(button);
         }
+        ShowOnStart.IsChecked = Preferences.Load().ShowLibraryOnStart;
         Loaded += (_, _) => SearchBox.Focus();
     }
 
@@ -60,6 +62,12 @@ public partial class LibraryWindow : Window
     }
     private void OnNewLesson(object sender, RoutedEventArgs e) { NewLessonRequested = true; DialogResult = true; }
     private void OnReturn(object sender, RoutedEventArgs e) => Close();
+    private void OnVersions(object sender, RoutedEventArgs e) { VersionsRequested = true; DialogResult = true; }
+    internal void OnShowOnStartChanged(object sender, RoutedEventArgs e)
+    {
+        try { var preferences = Preferences.Load(); preferences.ShowLibraryOnStart = ShowOnStart.IsChecked == true; preferences.Save(); }
+        catch (Exception ex) { Summary.Text = "Не удалось сохранить настройку: " + ex.Message; }
+    }
     private void OnForget(object sender, RoutedEventArgs e)
     {
         if (LessonsList.SelectedItem is not LibraryLesson entry) return;

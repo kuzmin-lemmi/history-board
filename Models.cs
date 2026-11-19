@@ -89,6 +89,8 @@ public static class LessonFile
     // otherwise Save would produce a file that Load rejects.
     public const long MaxAssetBytes = MaxFileSize - MaxJsonSize;
     public const int WorkingImageWidth = 3600;
+    public const int MaxTextLength = 100000;
+    public const int MaxPoints = 100000;
     public const string BackupExtension = ".bak";
     public const int CurrentVersion = 3;
     public static readonly string[] Kinds = ["text", "image", "pen", "arrow", "marker", "rect", "ellipse", "callout", "timeline", "cover"];
@@ -112,6 +114,8 @@ public static class LessonFile
         var directory = Path.GetDirectoryName(path)!;
         Directory.CreateDirectory(directory);
         lesson.Version = RequiredVersion(lesson);
+        // The same rules as Load: a lesson that could not be reopened is never written.
+        Validate(lesson);
         var json = JsonSerializer.SerializeToUtf8Bytes(lesson, JsonOptions);
         if (json.Length > MaxJsonSize) throw new InvalidDataException("Слишком много данных на доске. Удалите часть пометок или разделите урок на несколько файлов.");
         var ids = lesson.Items.Where(i => i.AssetId != null).Select(i => i.AssetId!).Distinct().ToArray();
@@ -181,6 +185,19 @@ public static class LessonFile
         return (lesson, assets);
     }
 
+    // Reads only the lesson description, without decoding its images: used to list versions.
+    public static Lesson Peek(string path)
+    {
+        if (new FileInfo(path).Length > MaxFileSize) throw new InvalidDataException("Файл слишком большой.");
+        using var zip = ZipFile.OpenRead(path);
+        var entry = zip.GetEntry("lesson.json") ?? throw new InvalidDataException("Это не файл урока.");
+        if (entry.Length > MaxJsonSize) throw new InvalidDataException("Слишком много данных на доске.");
+        using var stream = entry.Open();
+        var lesson = JsonSerializer.Deserialize<Lesson>(stream) ?? throw new InvalidDataException("Пустой файл.");
+        Validate(lesson);
+        return lesson;
+    }
+
     public static void Validate(Lesson lesson)
     {
         if (lesson.Version is < 1 or > CurrentVersion) throw new InvalidDataException("Эта версия урока не поддерживается.");
@@ -199,7 +216,9 @@ public static class LessonFile
         var ids = new HashSet<string>();
         foreach (var i in lesson.Items)
         {
-            if (i == null || string.IsNullOrEmpty(i.Id) || !ids.Add(i.Id) || !Kinds.Contains(i.Kind) || i.Text == null || i.Text.Length > 100000 || i.Points == null || i.Points.Count > 100000 ||
+            if (i?.Text?.Length > MaxTextLength) throw new InvalidDataException($"Надпись длиннее {MaxTextLength:N0} знаков. Разделите её на несколько надписей.");
+            if (i?.Points?.Count > MaxPoints) throw new InvalidDataException($"Пометка содержит больше {MaxPoints:N0} точек. Разделите её на несколько линий.");
+            if (i == null || string.IsNullOrEmpty(i.Id) || !ids.Add(i.Id) || !Kinds.Contains(i.Kind) || i.Text == null || i.Points == null ||
                 !Coordinate(i.X) || !Coordinate(i.Y) || new[] { i.Width, i.Height, i.Size }.Any(n => !double.IsFinite(n) || Math.Abs(n) > 100000) || i.Size < 1 || i.Size > 300 || i.Width <= 0 || i.Height <= 0 ||
                 i.Points.Any(p => !Coordinate(p.X) || !Coordinate(p.Y)) ||
                 i.GroupId is { } groupId && (groupId.Length != 32 || groupId.Any(c => !Uri.IsHexDigit(c))) ||

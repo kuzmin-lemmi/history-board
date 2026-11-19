@@ -38,6 +38,14 @@ public static partial class Timeline
 
     [GeneratedRegex(@"(?<![\p{L}\d])(?<n>\d{1,2}|[IVXLC]{1,6})\s*(-?й\s*)?(в\.|в\b|век|вв)", RegexOptions.IgnoreCase)]
     private static partial Regex CenturyPattern();
+    // On a Russian keyboard centuries are often typed with Cyrillic look-alikes: «ХIХ век» with
+    // the letter Х, «ІV в.» with the Ukrainian І, «С» instead of C. Only whole roman-looking
+    // words are converted, so ordinary words such as «с» or «сентября» stay unchanged for months.
+    [GeneratedRegex(@"(?<![\p{L}\d])[IVXLCivxlcХхІіСсⅠⅤⅩ]+(?![\p{L}])")]
+    private static partial Regex RomanWordPattern();
+    internal static string LatinRoman(string date) => RomanWordPattern().Replace(date, m =>
+        m.Value is "с" or "С" ? m.Value // the preposition «с», not the numeral C
+            : string.Concat(m.Value.Select(c => c switch { 'Х' or 'х' or 'Ⅹ' => 'X', 'І' or 'і' or 'Ⅰ' => 'I', 'С' or 'с' => 'C', 'Ⅴ' => 'V', _ => char.ToUpperInvariant(c) })));
     [GeneratedRegex(@"\d{1,4}")]
     private static partial Regex NumberPattern();
 
@@ -46,7 +54,7 @@ public static partial class Timeline
     {
         var beforeEra = date.Contains("до н", StringComparison.OrdinalIgnoreCase) || date.Contains("до р", StringComparison.OrdinalIgnoreCase) || date.Contains("BC", StringComparison.Ordinal);
         double? value = null;
-        var century = CenturyPattern().Match(date);
+        var century = CenturyPattern().Match(LatinRoman(date));
         if (century.Success)
         {
             var text = century.Groups["n"].Value;

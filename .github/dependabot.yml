@@ -1,0 +1,14 @@
+# Weekly update proposals. PDFium parses PDF files from outside the program, so security fixes
+# in it should reach a release quickly; GitHub Actions are kept current as well.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3

@@ -35,5 +35,6 @@ public partial class MainWindow
         if (window.ShowDialog() != true) return;
         if (window.SelectedPath is { } path) await OpenLessonAsync(path);
         else if (window.NewLessonRequested) OnNew(this, e);
+        else if (window.VersionsRequested) await RestoreEarlierVersionAsync();
     }
 }
