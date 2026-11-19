@@ -7,6 +7,8 @@ namespace HistoryBoard;
 public sealed class Preferences
 {
     public bool ShowLibraryOnStart { get; set; } = true;
+    // The only network request made without the user asking. It can be turned off in the update window.
+    public bool CheckUpdatesOnStart { get; set; } = true;
 
     public static string FilePath => Path.Combine(App.DataDirectory, "preferences.json");
 

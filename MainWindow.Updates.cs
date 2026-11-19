@@ -18,7 +18,7 @@ public partial class MainWindow
             updateWindow.Closed += (_, _) => updateWindow = null;
             updateWindow.Show(); return;
         }
-        if (checkingUpdates) return;
+        if (checkingUpdates || !Preferences.Load().CheckUpdatesOnStart) return;
         checkingUpdates = true;
         try
         {

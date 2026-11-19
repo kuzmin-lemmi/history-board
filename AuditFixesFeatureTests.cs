@@ -94,6 +94,17 @@ public partial class MainWindow
         library.ShowOnStart.IsChecked = true; library.OnShowOnStartChanged(library, new RoutedEventArgs());
         check(Preferences.Load().ShowLibraryOnStart && new LibraryWindow(Library).ShowOnStart.IsChecked == true, "The library at start-up can be turned on again");
         library.Close();
+
+        // ---- The background update check at start-up can be switched off ----
+        check(Preferences.Load().CheckUpdatesOnStart, "Update checks at start-up are on by default");
+        var updates = new UpdateWindow(this, _ => Task.CompletedTask, _ => { });
+        check(updates.CheckOnStart.IsChecked == true, "The update window shows the start-up check setting");
+        updates.CheckOnStart.IsChecked = false; updates.SaveCheckOnStart();
+        check(!Preferences.Load().CheckUpdatesOnStart && Preferences.Load().ShowLibraryOnStart, "Turning off the start-up check keeps the other preferences");
+        check(CheckForUpdatesAsync(false).IsCompleted, "With the setting off, start-up makes no network request");
+        updates.CheckOnStart.IsChecked = true; updates.SaveCheckOnStart();
+        check(Preferences.Load().CheckUpdatesOnStart, "The start-up check can be turned on again");
+        updates.Close();
     }
 
     private static bool TrySetClipboardImage(BitmapSource image)

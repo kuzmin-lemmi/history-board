@@ -17,6 +17,7 @@ public sealed class UpdateWindow : Window
     private readonly TextBlock status = new() { FontSize = 11, TextWrapping = TextWrapping.Wrap, Foreground = BoardSurface.Brush("#7B827C"), Margin = new Thickness(0, 0, 0, 14) };
     private readonly Button primary = new() { Content = "Проверить ещё раз", Background = BoardSurface.Brush("#58725B"), Foreground = Brushes.White, Padding = new Thickness(17, 10, 17, 10), IsEnabled = false };
     private readonly Button cancel = new() { Content = "Закрыть", Padding = new Thickness(14, 10, 14, 10), Margin = new Thickness(8, 0, 0, 0) };
+    internal readonly CheckBox CheckOnStart = new() { Content = "Проверять обновления при запуске программы", FontSize = 12, Margin = new Thickness(0, 0, 0, 14), ToolTip = "Программа обращается к GitHub, только чтобы узнать номер последней версии. Уроки и личные данные никуда не отправляются." };
     private CancellationTokenSource? operation;
     private AppRelease? release;
     private string? downloaded;
@@ -33,6 +34,9 @@ public sealed class UpdateWindow : Window
         top.Children.Add(headline); top.Children.Add(summary); panel.Children.Add(top);
         var bottom = new StackPanel(); DockPanel.SetDock(bottom, Dock.Bottom);
         bottom.Children.Add(progress); bottom.Children.Add(status);
+        CheckOnStart.IsChecked = Preferences.Load().CheckUpdatesOnStart;
+        CheckOnStart.Click += (_, _) => SaveCheckOnStart();
+        bottom.Children.Add(CheckOnStart);
         var buttons = new StackPanel { Orientation = Orientation.Horizontal }; buttons.Children.Add(primary); buttons.Children.Add(cancel); bottom.Children.Add(buttons);
         var link = new Button { Content = "Открыть релизы на GitHub ↗", FontSize = 11, Foreground = BoardSurface.Brush("#7B827C"), HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(0, 12, 0, 0) };
         link.Click += (_, _) => { try { Process.Start(new ProcessStartInfo((release?.Page ?? UpdateService.ReleasesPage).AbsoluteUri) { UseShellExecute = true }); } catch (Exception ex) { status.Text = ex.Message; } };
@@ -43,6 +47,12 @@ public sealed class UpdateWindow : Window
         cancel.Click += (_, _) => { if (busy) operation?.Cancel(); else Close(); };
         Loaded += async (_, _) => await CheckAsync();
         Closed += (_, _) => { closed = true; operation?.Cancel(); service.Dispose(); };
+    }
+
+    internal void SaveCheckOnStart()
+    {
+        try { var preferences = Preferences.Load(); preferences.CheckUpdatesOnStart = CheckOnStart.IsChecked == true; preferences.Save(); }
+        catch (Exception ex) { status.Text = "Настройка не сохранена: " + ex.Message; }
     }
 
     private void BeginOperation()
