@@ -38,6 +38,16 @@ public partial class App : Application
             catch (Exception ex) { Console.Error.WriteLine(ex); Shutdown(1); }
             return;
         }
+        var shotsIndex = Array.IndexOf(e.Args, "--promo-screenshots");
+        if (shotsIndex >= 0 && shotsIndex + 1 < e.Args.Length)
+        {
+            var folder = Path.GetFullPath(e.Args[shotsIndex + 1]);
+            DataDirectory = Path.Combine(folder, "data"); Directory.CreateDirectory(DataDirectory);
+            var window = new MainWindow(false); MainWindow = window; window.Show();
+            try { await window.WritePromoScreenshots(folder); Shutdown(0); }
+            catch (Exception ex) { File.WriteAllText(Path.Combine(folder, "failure.txt"), ex.ToString()); window.CloseWithoutPrompt(); Shutdown(1); }
+            return;
+        }
         if (e.Args.Contains("--uninstall")) { Installer.Uninstall(); Shutdown(); return; }
         var waitIndex = Array.IndexOf(e.Args, "--wait-for-process");
         if (waitIndex >= 0 && waitIndex + 1 < e.Args.Length && int.TryParse(e.Args[waitIndex + 1], out var processId) && processId > 0 && processId != Environment.ProcessId)

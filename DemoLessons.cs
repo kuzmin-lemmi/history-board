@@ -157,8 +157,11 @@ public static class DemoLessons
         var retreat = new[] { moscow, malo, vyazma, smolensk, borisov, vilna, kovno };
         for (var i = 1; i < retreat.Length; i++) b.Arrow(retreat[i - 1] with { Y = retreat[i - 1].Y + 14 }, retreat[i] with { Y = retreat[i].Y + 14 }, Red, 5, 3).GroupId = retreatGroup;
         b.Arrow(moscow with { X = moscow.X - 10, Y = moscow.Y + 30 }, tarutino with { Y = tarutino.Y - 10 }, Green, 5, 2);
-        b.Dot(kovno, "Ковно"); b.Dot(vilna, "Вильна"); b.Dot(vitebsk, "Витебск"); b.Dot(smolensk, "Смоленск"); b.Dot(vyazma, "Вязьма", dy: 14);
-        b.Dot(borodino, "Бородино"); b.Dot(moscow, "Москва", 28, Red); b.Dot(malo, "Малоярославец", dx: -120, dy: 16); b.Dot(tarutino, "Тарутино", dy: 12); b.Dot(borisov, "Борисов", dx: 14, dy: 10);
+        // The invasion runs just above the towns and the retreat just below, so every label sits
+        // where no arrow crosses it.
+        b.Dot(kovno, "Ковно", dx: -10, dy: -72); b.Dot(vilna, "Вильна", dx: -100, dy: 24); b.Dot(vitebsk, "Витебск", dx: -46, dy: -66);
+        b.Dot(smolensk, "Смоленск", dx: 10, dy: 22); b.Dot(vyazma, "Вязьма", dx: -88, dy: -60);
+        b.Dot(borodino, "Бородино", dx: -62, dy: 12); b.Dot(moscow, "Москва", 28, Red); b.Dot(malo, "Малоярославец", dx: -120, dy: 16); b.Dot(tarutino, "Тарутино", dy: 12); b.Dot(borisov, "Борисов", dx: 20, dy: 10);
         b.Callout(borodino.X, borodino.Y, borodino.X - 360, borodino.Y - 230, "26 августа — Бородинское сражение", 22, Ink, 1);
         b.Text(100, 760, "—  наступление «Великой армии»", 22, Blue, step: 1, width: 500);
         b.Text(620, 760, "—  Тарутинский манёвр русской армии", 22, Green, step: 2, width: 520);
